@@ -1,0 +1,583 @@
+#!/usr/bin/env python3
+"""
+Film Festival Outreach Platform — Main API
+Flask application with Supabase backend for contact discovery,
+enrichment, icebreaker generation, and email drip campaigns.
+"""
+import os
+import sys
+import json
+import logging
+from datetime import datetime, timedelta
+from flask import Flask, jsonify, request, render_template, redirect, send_file
+from flask_cors import CORS
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Setup
+BASE_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(BASE_DIR))
+
+# Load environment
+env_path = BASE_DIR / '.env'
+if env_path.exists():
+    load_dotenv(env_path)
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Initialize Flask
+app = Flask(
+    __name__,
+    template_folder=str(BASE_DIR / 'public'),
+    static_folder=str(BASE_DIR / 'public'),
+    static_url_path=''
+)
+app.secret_key = os.getenv('FLASK_SECRET_KEY', 'filmreach-dev-key')
+CORS(app)
+
+# Supabase client
+from supabase import create_client, Client
+
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+
+supabase: Client = None
+effective_key = SUPABASE_SERVICE_KEY or SUPABASE_KEY
+
+if SUPABASE_URL and effective_key:
+    supabase = create_client(SUPABASE_URL, effective_key)
+    logger.info("Supabase client initialized")
+else:
+    logger.warning("Supabase credentials not found")
+
+# =============================================================================
+# ROUTES — Pages
+# =============================================================================
+
+@app.route('/')
+def index():
+    return render_template('login.html')
+
+@app.route('/dashboard')
+def dashboard():
+    return render_template('dashboard.html')
+
+@app.route('/ping')
+def ping():
+    return jsonify({
+        'status': 'ok',
+        'app': 'FilmReach',
+        'supabase': supabase is not None
+    })
+
+# =============================================================================
+# ROUTES — Projects
+# =============================================================================
+
+@app.route('/api/projects', methods=['GET'])
+def list_projects():
+    try:
+        result = supabase.table('projects').select('*').order('created_at', desc=True).execute()
+        return jsonify({'projects': result.data or []})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/projects', methods=['POST'])
+def create_project():
+    try:
+        data = request.json
+        name = data.get('name')
+        if not name:
+            return jsonify({'error': 'Project name required'}), 400
+        result = supabase.table('projects').insert({'name': name, 'description': data.get('description', '')}).execute()
+        return jsonify({'project': result.data[0]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# ROUTES — Dashboard Stats
+# =============================================================================
+
+@app.route('/api/dashboard/stats')
+def dashboard_stats():
+    """Get aggregate statistics for the dashboard."""
+    try:
+        project_id = request.args.get('project_id')
+        if not project_id: return jsonify({'error': 'project_id required'}), 400
+        # Total contacts
+        contacts = supabase.table('contacts').select('id, status', count='exact').eq('project_id', project_id).execute()
+        total = contacts.count or 0
+        
+        # Count by status
+        status_counts = {}
+        for contact in (contacts.data or []):
+            s = contact.get('status', 'new')
+            status_counts[s] = status_counts.get(s, 0) + 1
+        
+        # Email stats
+        emails = supabase.table('email_sequences').select('id, status', count='exact').eq('project_id', project_id).execute()
+        email_counts = {}
+        for seq in (emails.data or []):
+            s = seq.get('status', 'pending')
+            email_counts[s] = email_counts.get(s, 0) + 1
+        
+        return jsonify({
+            'contacts': {
+                'total': total,
+                'new': status_counts.get('new', 0),
+                'enriched': status_counts.get('enriched', 0),
+                'icebreaker_ready': status_counts.get('icebreaker_ready', 0),
+                'in_sequence': status_counts.get('in_sequence', 0),
+                'completed': status_counts.get('completed', 0),
+            },
+            'emails': {
+                'total': emails.count or 0,
+                'pending': email_counts.get('pending', 0),
+                'sent': email_counts.get('sent', 0),
+                'opened': email_counts.get('opened', 0),
+                'replied': email_counts.get('replied', 0),
+                'bounced': email_counts.get('bounced', 0),
+            }
+        })
+    except Exception as e:
+        logger.error(f"Stats error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# ROUTES — Contacts
+# =============================================================================
+
+@app.route('/api/contacts')
+def list_contacts():
+    """List contacts with optional filters."""
+    try:
+        project_id = request.args.get('project_id')
+        if not project_id: return jsonify({'error': 'project_id required'}), 400
+        project_id = request.args.get('project_id')
+        if not project_id: return jsonify({'error': 'project_id required'}), 400
+        status = request.args.get('status')
+        search = request.args.get('search', '')
+        limit = int(request.args.get('limit', 50))
+        offset = int(request.args.get('offset', 0))
+        
+        query = supabase.table('contacts').select('*', count='exact').eq('project_id', project_id).eq('project_id', project_id)
+        
+        if status:
+            query = query.eq('status', status)
+        
+        if search:
+            query = query.or_(f"name.ilike.%{search}%,bio.ilike.%{search}%,email.ilike.%{search}%")
+        
+        result = query.order('created_at', desc=True).range(offset, offset + limit - 1).execute()
+        
+        return jsonify({
+            'contacts': result.data or [],
+            'total': result.count or 0,
+            'limit': limit,
+            'offset': offset
+        })
+    except Exception as e:
+        logger.error(f"List contacts error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/contacts/<contact_id>', methods=['GET'])
+def get_contact(contact_id):
+    """Get single contact."""
+    try:
+        result = supabase.table('contacts').select('*').eq('id', contact_id).single().execute()
+        return jsonify({'contact': result.data})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/contacts/<contact_id>', methods=['PUT'])
+def update_contact(contact_id):
+    """Update a contact."""
+    try:
+        data = request.json
+        allowed = ['name', 'bio', 'linkedin_url', 'email', 'instagram', 'icebreaker', 'status']
+        update_data = {k: v for k, v in data.items() if k in allowed}
+        update_data['updated_at'] = datetime.utcnow().isoformat()
+        
+        result = supabase.table('contacts').update(update_data).eq('id', contact_id).execute()
+        return jsonify({'contact': result.data[0]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/contacts/<contact_id>', methods=['DELETE'])
+def delete_contact(contact_id):
+    """Delete a contact."""
+    try:
+        supabase.table('contacts').delete().eq('id', contact_id).execute()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/contacts/bulk-delete', methods=['POST'])
+def bulk_delete_contacts():
+    """Delete multiple contacts."""
+    try:
+        data = request.json
+        contact_ids = data.get('contact_ids', [])
+        
+        if not contact_ids:
+            return jsonify({'error': 'No contact IDs provided'}), 400
+            
+        supabase.table('contacts').delete().in_('id', contact_ids).execute()
+        return jsonify({'success': True, 'deleted': len(contact_ids)})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# ROUTES — Search Pipeline
+# =============================================================================
+
+@app.route('/api/contacts/search', methods=['POST'])
+def trigger_search():
+    """Trigger a Serper search + scrape pipeline."""
+    try:
+        data = request.json
+        project_id = data.get('project_id')
+        queries = data.get('queries', [])
+        num_results = data.get('num_results', 100)
+        
+        if not queries or not project_id:
+            return jsonify({'error': 'No search queries provided'}), 400
+        
+        from execution.serper_search import run_search_pipeline
+        from execution.scrape_contacts import extract_and_store_contacts
+        
+        # Run search
+        results = run_search_pipeline(queries, num_results)
+        
+        # Extract and store contacts
+        all_stats = {'total_results': len(results), 'inserted': 0, 'skipped': 0, 'errors': 0}
+        
+        for query in queries:
+            query_results = [r for r in results if True]  # All results for now
+            stats = extract_and_store_contacts(query_results, source_query=query, project_id=project_id)
+            all_stats['inserted'] += stats.get('inserted', 0)
+            all_stats['skipped'] += stats.get('skipped', 0)
+            all_stats['errors'] += stats.get('errors', 0)
+        
+        return jsonify(all_stats)
+    except Exception as e:
+        logger.error(f"Search pipeline error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# ROUTES — Enrichment
+# =============================================================================
+
+@app.route('/api/contacts/enrich', methods=['POST'])
+def trigger_enrichment():
+    """Trigger email/IG enrichment for pending contacts."""
+    try:
+        data = request.json or {}
+        limit = data.get('limit', 50)
+        
+        from execution.enrich_contacts import enrich_contacts
+        stats = enrich_contacts(limit=limit)
+        
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"Enrichment error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# ROUTES — Icebreakers
+# =============================================================================
+
+@app.route('/api/contacts/icebreaker', methods=['POST'])
+def trigger_icebreakers():
+    """Generate icebreakers for enriched contacts."""
+    try:
+        data = request.json or {}
+        limit = data.get('limit', 50)
+        
+        from execution.generate_icebreakers import generate_icebreakers_batch
+        stats = generate_icebreakers_batch(limit=limit)
+        
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"Icebreaker error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# ROUTES — Email Templates
+# =============================================================================
+
+@app.route('/api/templates')
+def list_templates():
+    """List all email templates."""
+    try:
+        project_id = request.args.get('project_id')
+        if not project_id: return jsonify({'error': 'project_id required'}), 400
+        result = supabase.table('email_templates').select('*').eq('project_id', project_id).order('step_number').execute()
+        return jsonify({'templates': result.data or []})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/templates/<int:template_id>', methods=['PUT'])
+def update_template(template_id):
+    """Update an email template."""
+    try:
+        data = request.json
+        allowed = ['name', 'subject_template', 'body_template', 'delay_days']
+        update_data = {k: v for k, v in data.items() if k in allowed}
+        
+        result = supabase.table('email_templates').update(update_data).eq('id', template_id).execute()
+        return jsonify({'template': result.data[0]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# ROUTES — Email Sequences
+# =============================================================================
+
+@app.route('/api/sequences')
+def list_sequences():
+    """List email sequences with contact info."""
+    try:
+        project_id = request.args.get('project_id')
+        if not project_id: return jsonify({'error': 'project_id required'}), 400
+        project_id = request.args.get('project_id')
+        if not project_id: return jsonify({'error': 'project_id required'}), 400
+        contact_id = request.args.get('contact_id')
+        status = request.args.get('status')
+        
+        query = supabase.table('email_sequences').select('*, contacts(name, email)').eq('project_id', project_id).eq('project_id', project_id)
+        
+        if contact_id:
+            query = query.eq('contact_id', contact_id)
+        if status:
+            query = query.eq('status', status)
+        
+        result = query.order('created_at', desc=True).limit(100).execute()
+        return jsonify({'sequences': result.data or []})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/sequences/create', methods=['POST'])
+def create_sequences():
+    """Create email sequences from templates for selected contacts."""
+    try:
+        data = request.json
+        project_id = data.get('project_id')
+        contact_ids = data.get('contact_ids', [])
+        
+        if not contact_ids or not project_id:
+            return jsonify({'error': 'No contacts or project_id selected'}), 400
+        
+        # Get templates
+        templates = supabase.table('email_templates').select('*').eq('project_id', project_id).order('step_number').execute()
+        if not templates.data:
+            return jsonify({'error': 'No email templates found. Seed them first.'}), 400
+        
+        # Get contacts
+        contacts = supabase.table('contacts').select('*').in_('id', contact_ids).execute()
+        
+        created = 0
+        for contact in (contacts.data or []):
+            base_date = datetime.utcnow()
+            
+            for template in templates.data:
+                # Render template with contact variables
+                variables = {
+                    'name': contact.get('name', 'there'),
+                    'first_name': contact.get('name', 'there').split()[0],
+                    'bio': contact.get('bio', ''),
+                    'icebreaker': contact.get('icebreaker', ''),
+                }
+                
+                subject = template['subject_template']
+                body = template['body_template']
+                for key, val in variables.items():
+                    subject = subject.replace(f'{{{{{key}}}}}', val)
+                    body = body.replace(f'{{{{{key}}}}}', val)
+                
+                scheduled = base_date + timedelta(days=template.get('delay_days', 0))
+                
+                supabase.table('email_sequences').insert({
+                    'project_id': project_id,
+                    'contact_id': contact['id'],
+                    'template_id': template['id'],
+                    'step_number': template['step_number'],
+                    'subject': subject,
+                    'body': body,
+                    'status': 'pending',
+                    'scheduled_at': scheduled.isoformat()
+                }).execute()
+                
+                created += 1
+            
+            # Update contact status
+            supabase.table('contacts').update({
+                'status': 'in_sequence',
+                'updated_at': datetime.utcnow().isoformat()
+            }).eq('id', contact['id']).execute()
+        
+        return jsonify({'created': created, 'contacts': len(contacts.data or [])})
+    except Exception as e:
+        logger.error(f"Create sequences error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/sequences/send', methods=['POST'])
+def trigger_send():
+    """Send pending scheduled emails."""
+    try:
+        data = request.json or {}
+        limit = data.get('limit', 50)
+        dry_run = data.get('dry_run', False)
+        
+        from execution.send_emails import send_pending_emails
+        stats = send_pending_emails(limit=limit, dry_run=dry_run)
+        
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"Send error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# ROUTES — Search Runs
+# =============================================================================
+
+@app.route('/api/search-runs')
+def list_search_runs():
+    """List search run history."""
+    try:
+        project_id = request.args.get('project_id')
+        if not project_id: return jsonify({'error': 'project_id required'}), 400
+        result = supabase.table('search_runs').select('*').eq('project_id', project_id).order('created_at', desc=True).limit(20).execute()
+        return jsonify({'runs': result.data or []})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# SEED — Email Templates
+# =============================================================================
+
+@app.route('/api/seed-templates', methods=['POST'])
+def seed_templates():
+    """Seed the 12-step drip email templates."""
+    try:
+        data = request.json or {}
+        project_id = data.get('project_id')
+        if not project_id: return jsonify({'error': 'project_id required'}), 400
+        templates = [
+            {
+                'step_number': 1,
+                'name': 'Logline Introduction',
+                'subject_template': 'A story I think you\'d connect with, {{first_name}}',
+                'body_template': '<p>Hi {{first_name}},</p><p>{{icebreaker}}</p><p>I\'m reaching out because I\'ve just completed an indie film that I believe aligns with your sensibilities. Here\'s the logline:</p><p><em>[Your logline here]</em></p><p>I\'d love to share more if this piques your interest. Would you be open to a brief conversation?</p><p>Warm regards,<br>[Your Name]</p>',
+                'delay_days': 0
+            },
+            {
+                'step_number': 2,
+                'name': 'Trailer Share',
+                'subject_template': 'The trailer is here — would love your eyes on it',
+                'body_template': '<p>Hi {{first_name}},</p><p>Following up on my previous note about our film. We just released the official trailer and I immediately thought of you.</p><p>🎬 <a href="[TRAILER_URL]">Watch the trailer here</a></p><p>The film explores [brief theme] through [unique angle]. I think it speaks to the kind of stories you champion.</p><p>Would love to hear your initial reaction.</p><p>Best,<br>[Your Name]</p>',
+                'delay_days': 3
+            },
+            {
+                'step_number': 3,
+                'name': 'Behind the Scenes',
+                'subject_template': 'The story behind making {{first_name}} — BTS peek',
+                'body_template': '<p>Hi {{first_name}},</p><p>I wanted to share something more personal — a behind-the-scenes look at the making of our film.</p><p>We shot over [X days] in [location], with a crew of [X people]. The biggest challenge was [brief challenge], but it\'s exactly what gives the film its authenticity.</p><p>Here are some exclusive BTS photos: [BTS_LINK]</p><p>I think the production story itself is worth telling. Happy to share more details if you\'re interested in covering the filmmaking journey.</p><p>Cheers,<br>[Your Name]</p>',
+                'delay_days': 5
+            },
+            {
+                'step_number': 4,
+                'name': 'Director\'s Vision',
+                'subject_template': 'Why I made this film — a director\'s note',
+                'body_template': '<p>Hi {{first_name}},</p><p>I\'ve been thinking about what compelled me to make this film, and I wanted to share that with you directly.</p><p>[2-3 sentences about the director\'s vision, what inspired the story, why it matters now]</p><p>I believe stories like this need voices like yours to help them reach the right audience. Would you be interested in a conversation about the film\'s themes?</p><p>With gratitude,<br>[Your Name]</p>',
+                'delay_days': 7
+            },
+            {
+                'step_number': 5,
+                'name': 'Press Kit & Stills',
+                'subject_template': 'Press kit + exclusive stills for you',
+                'body_template': '<p>Hi {{first_name}},</p><p>I\'ve put together a comprehensive press kit for easy reference:</p><ul><li>📋 Press Kit: [PRESS_KIT_LINK]</li><li>📸 Hi-res Production Stills: [STILLS_LINK]</li><li>🎬 Trailer: [TRAILER_LINK]</li><li>📝 Director\'s Statement</li></ul><p>Everything you\'d need if you decide to feature or review the film. No pressure at all — just wanted to make it easy for you.</p><p>Best,<br>[Your Name]</p>',
+                'delay_days': 10
+            },
+            {
+                'step_number': 6,
+                'name': 'Festival Selections',
+                'subject_template': 'Exciting news — festival selections!',
+                'body_template': '<p>Hi {{first_name}},</p><p>Wanted to share some exciting news — our film has been selected for [Festival Name(s)]!</p><p>The festival run begins [date/month], and I thought you might want to know ahead of the public announcement.</p><p>If you\'re attending or covering [Festival Name], I\'d love to arrange a screening or interview opportunity.</p><p>More details: [FESTIVAL_LINK]</p><p>Cheers,<br>[Your Name]</p>',
+                'delay_days': 14
+            },
+            {
+                'step_number': 7,
+                'name': 'Review Request',
+                'subject_template': 'Would you consider reviewing our film?',
+                'body_template': '<p>Hi {{first_name}},</p><p>I know your time is valuable, so I\'ll be direct — would you be open to watching and reviewing our film?</p><p>I can provide:</p><ul><li>🎥 Private screener link (your eyes only)</li><li>📋 Press notes and director Q&A</li><li>📸 Exclusive stills for your publication</li></ul><p>Your honest perspective would mean the world to our team. No obligation to write positively — we value authentic criticism.</p><p>Just say the word and I\'ll send the screener right over.</p><p>Respectfully yours,<br>[Your Name]</p>',
+                'delay_days': 18
+            },
+            {
+                'step_number': 8,
+                'name': 'Exclusive Clip',
+                'subject_template': 'An exclusive clip — just for you',
+                'body_template': '<p>Hi {{first_name}},</p><p>I have something special — an exclusive clip from the film that hasn\'t been released publicly yet.</p><p>🎬 <a href="[CLIP_URL]">Watch the exclusive clip</a></p><p>This scene captures the heart of the film. I chose to share it with you because I think it resonates with the storytelling you appreciate.</p><p>Feel free to share it on your platform with an exclusive tag if you\'d like!</p><p>Best,<br>[Your Name]</p>',
+                'delay_days': 22
+            },
+            {
+                'step_number': 9,
+                'name': 'Audience Reaction',
+                'subject_template': 'The audience is responding — here\'s what they\'re saying',
+                'body_template': '<p>Hi {{first_name}},</p><p>I wanted to share some early audience reactions to our film:</p><blockquote>"[Quote 1]" — Audience member</blockquote><blockquote>"[Quote 2]" — Festival attendee</blockquote><p>The film is generating real conversations about [theme]. I thought you\'d find the audience response interesting, especially given your coverage of [relevant topic].</p><p>Still happy to arrange a screener if you\'re interested.</p><p>Warmly,<br>[Your Name]</p>',
+                'delay_days': 26
+            },
+            {
+                'step_number': 10,
+                'name': 'Screening Invite',
+                'subject_template': 'Personal invitation — private screening',
+                'body_template': '<p>Hi {{first_name}},</p><p>I\'d like to personally invite you to a private screening of our film.</p><p>📅 Date: [DATE]<br>📍 Location: [LOCATION/VIRTUAL]<br>🕐 Time: [TIME]</p><p>There will be a Q&A session with the director afterwards. It\'s an intimate gathering of [X] people who we think would truly appreciate the film.</p><p>RSVP: [RSVP_LINK]</p><p>Hope to see you there,<br>[Your Name]</p>',
+                'delay_days': 30
+            },
+            {
+                'step_number': 11,
+                'name': 'Final Nudge',
+                'subject_template': 'Last thoughts before we go quiet',
+                'body_template': '<p>Hi {{first_name}},</p><p>I realize I\'ve sent a few messages and I want to be respectful of your inbox. This will be my second-to-last email.</p><p>If any of the following interest you, just reply with the number:</p><ol><li>Private screener link</li><li>Interview with the director</li><li>Press kit materials</li><li>Remove me from future emails</li></ol><p>No hard feelings either way. I genuinely appreciate your time.</p><p>With respect,<br>[Your Name]</p>',
+                'delay_days': 35
+            },
+            {
+                'step_number': 12,
+                'name': 'Thank You + Video Message',
+                'subject_template': 'A personal thank you (video inside)',
+                'body_template': '<p>Hi {{first_name}},</p><p>Whether or not we connected on this particular film, I wanted to send a genuine thank you for the work you do in championing storytelling.</p><p>🎥 <a href="[VIDEO_MESSAGE_URL]">A short personal video message for you</a></p><p>If our paths cross at a festival or screening in the future, I\'d love to say hello in person. And if you ever want to see what we\'re working on next, I\'m always just an email away.</p><p>With gratitude and admiration,<br>[Your Name]</p>',
+                'delay_days': 40
+            }
+        ]
+        
+        # Check if templates already exist
+        existing = supabase.table('email_templates').select('id', count='exact').eq('project_id', project_id).execute()
+        if existing.count and existing.count > 0:
+            return jsonify({'message': f'Templates already seeded ({existing.count} exist)', 'count': existing.count})
+        
+        # Insert templates
+        for t in templates:
+            t['project_id'] = project_id
+            supabase.table('email_templates').insert(t).execute()
+        
+        return jsonify({'message': f'Seeded {len(templates)} email templates', 'count': len(templates)})
+    except Exception as e:
+        logger.error(f"Seed error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
+# MAIN
+# =============================================================================
+
+if __name__ == '__main__':
+    port = int(os.getenv('FLASK_PORT', 5001))
+    app.run(host='0.0.0.0', port=port, debug=True)
