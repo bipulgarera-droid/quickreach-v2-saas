@@ -58,7 +58,7 @@ else:
 
 @app.route('/')
 def index():
-    return render_template('login.html')
+    return redirect('/dashboard')
 
 @app.route('/dashboard')
 def dashboard():
