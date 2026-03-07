@@ -660,6 +660,9 @@
 
             actions.innerHTML = `
                 <div class="flex items-center gap-2">
+                    <button onclick="runDailySend()" id="btnDailyRun" class="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg transition-all">
+                        <i data-lucide="play" class="w-4 h-4 inline mr-1"></i> Run Daily Send
+                    </button>
                     <button onclick="showTestSendModal()" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg transition-all">
                         <i data-lucide="send" class="w-4 h-4 inline mr-1"></i> Test Workflow
                     </button>
@@ -1155,6 +1158,55 @@
                 showToast('❌ Reply check error: ' + e.message);
             } finally {
                 btn.innerHTML = origHtml;
+                if (window.lucide) window.lucide.createIcons();
+            }
+        }
+
+        async function runDailySend() {
+            const btn = document.getElementById('btnDailyRun');
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1"></i> Running...';
+            btn.disabled = true;
+            if (window.lucide) window.lucide.createIcons();
+
+            showToast('🚀 Daily run started — checking replies + sending pending emails...');
+
+            try {
+                const res = await fetch('/api/daily-run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ limit: 250, dry_run: false })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                const sent = data.email_send?.sent || 0;
+                const replies = data.reply_check?.replies_found || 0;
+                const duration = data.duration_seconds || 0;
+
+                openModal(`
+                    <div class="p-6 text-center">
+                        <div class="text-4xl mb-4">✅</div>
+                        <h2 class="text-xl font-bold text-white mb-2">Daily Run Complete</h2>
+                        <p class="text-gray-400 mb-4">${Math.round(duration)}s elapsed</p>
+                        <div class="grid grid-cols-2 gap-4 text-center">
+                            <div class="bg-gray-800 rounded-lg p-4">
+                                <div class="text-2xl font-bold text-violet-400">${sent}</div>
+                                <div class="text-xs text-gray-500 mt-1">Emails Sent</div>
+                            </div>
+                            <div class="bg-gray-800 rounded-lg p-4">
+                                <div class="text-2xl font-bold text-amber-400">${replies}</div>
+                                <div class="text-xs text-gray-500 mt-1">Replies Found</div>
+                            </div>
+                        </div>
+                        <button onclick="closeModal(); loadContent();" class="mt-6 w-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-medium py-2 rounded-lg">Done</button>
+                    </div>
+                `);
+            } catch (e) {
+                showToast('❌ Daily run error: ' + e.message);
+            } finally {
+                btn.innerHTML = origHtml;
+                btn.disabled = false;
                 if (window.lucide) window.lucide.createIcons();
             }
         }

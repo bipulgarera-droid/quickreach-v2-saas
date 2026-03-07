@@ -730,6 +730,23 @@ def check_replies():
         logger.error(f"Reply check error: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/daily-run', methods=['POST'])
+def trigger_daily_run():
+    """Trigger the full daily workflow: check replies + send pending emails."""
+    try:
+        data = request.json or {}
+        limit = data.get('limit', 250)
+        dry_run = data.get('dry_run', False)
+
+        from execution.daily_run import daily_run
+        stats = daily_run(limit=limit, dry_run=dry_run)
+
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"Daily run error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # =============================================================================
 # ROUTES — Search Runs
 # =============================================================================
