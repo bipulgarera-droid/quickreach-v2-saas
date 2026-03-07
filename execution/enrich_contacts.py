@@ -399,14 +399,66 @@ def find_instagram_serper(name: str, role_keyword: str = '') -> Optional[str]:
     return None
 
 
+def _score_email(email: str, name: str, domain: str, source: str) -> int:
+    """
+    Score an email candidate on a 0-100 confidence scale.
+    
+    Scoring factors:
+        - Source reliability: apify_linkedin > apify_contact_page > serper
+        - Name match: does the email contain the prospect's first/last name?
+        - Domain match: does the email domain match the company domain?
+        - Generic penalty: info@, submissions@, admin@ get penalized
+    """
+    score = 0
+    email_lower = email.lower()
+    local_part = email_lower.split('@')[0]
+    email_domain = email_lower.split('@')[1] if '@' in email_lower else ''
+    
+    # Source base score
+    source_scores = {
+        'apify_linkedin': 40,      # Directly from their LinkedIn profile
+        'apify_contact_page': 25,  # From company website
+        'serper': 15,              # Regex from Google snippets
+    }
+    score += source_scores.get(source, 10)
+    
+    # Name match bonus (huge signal — email contains their name)
+    name_parts = name.lower().split()
+    first_name = name_parts[0] if name_parts else ''
+    last_name = name_parts[-1] if len(name_parts) > 1 else ''
+    
+    if first_name and last_name:
+        if first_name in local_part and last_name in local_part:
+            score += 35  # firstname.lastname@ — very high confidence
+        elif first_name in local_part or last_name in local_part:
+            score += 20  # partial name match
+        elif first_name[0] in local_part and last_name in local_part:
+            score += 15  # initial + lastname (e.g. cmauricette@)
+    
+    # Domain match bonus
+    if domain and email_domain and domain.lower() in email_domain:
+        score += 15  # email is @companydomain.com
+    
+    # Generic email penalty
+    generic_prefixes = ['info', 'contact', 'hello', 'admin', 'support', 
+                        'submissions', 'general', 'office', 'team', 'press',
+                        'media', 'marketing', 'sales', 'jobs', 'careers', 'hr']
+    if any(local_part.startswith(g) for g in generic_prefixes):
+        score -= 20  # It's a shared/generic inbox, not personal
+    
+    return max(0, min(100, score))
+
+
 def enrich_single_contact(contact: dict) -> dict:
     """
     Enrich a single contact with LinkedIn profile data, email(s), and Instagram.
     
     Flow:
         1. If contact has a LinkedIn URL → scrape via Apify (profile data + email attempt)
-        2. If no email from Apify → fall back to Serper dorks
-        3. Find Instagram via Serper
+        2. Extract company domain
+        3. Run ALL email sources in parallel, collect candidates
+        4. Score each candidate and pick the best
+        5. Find Instagram via Serper
     
     Returns:
         Dict of enriched fields to update
@@ -422,7 +474,8 @@ def enrich_single_contact(contact: dict) -> dict:
         'updated_at': datetime.utcnow().isoformat()
     }
     
-    apify_email = None
+    # Collect ALL email candidates from ALL sources: (email, source_tag)
+    all_candidates = []
     
     # ── Step 0: Apify LinkedIn Scrape ──────────────────────────────────────
     slug = extract_linkedin_slug(linkedin_url)
@@ -434,7 +487,6 @@ def enrich_single_contact(contact: dict) -> dict:
             updates['enrichment_data']['linkedin_headline'] = apify_data['headline']
         if apify_data.get('current_company'):
             updates['enrichment_data']['linkedin_company'] = apify_data['current_company']
-            # Use Apify's company for domain extraction if we don't have one
             if not company_name:
                 company_name = apify_data['current_company']
         if apify_data.get('current_title'):
@@ -444,12 +496,8 @@ def enrich_single_contact(contact: dict) -> dict:
         if apify_data.get('location'):
             updates['enrichment_data']['linkedin_location'] = apify_data['location']
         
-        # Check if Apify found an email
         if apify_data.get('email'):
-            apify_email = apify_data['email']
-            updates['email'] = apify_email
-            updates['enrichment_data']['email_source'] = 'apify_linkedin'
-            logger.info(f"  ✅ Apify found email: {apify_email}")
+            all_candidates.append((apify_data['email'], 'apify_linkedin'))
     
     # ── Step 1: Domain Extraction ──────────────────────────────────────────
     domain = None
@@ -459,23 +507,51 @@ def enrich_single_contact(contact: dict) -> dict:
             updates['enrichment_data']['company_domain'] = domain
             logger.info(f"  Extracted domain: {domain}")
     
-    # ── Step 2: Serper Email Fallback (only if Apify didn't find one) ─────
-    if not apify_email:
-        emails = find_emails_serper(name, role_keyword, domain)
-        if emails:
-            updates['email'] = emails[0]
-            updates['enrichment_data']['email_source'] = 'serper_enhanced'
-            updates['enrichment_data']['email_candidates'] = emails
-            logger.info(f"  Found {len(emails)} email(s) via Serper: {emails}")
+    # ── Step 2: Serper Email Dorks (always runs) ──────────────────────────
+    serper_emails = find_emails_serper(name, role_keyword, domain)
+    for em in serper_emails:
+        all_candidates.append((em, 'serper'))
     
-    # ── Step 2.5: Apify Contact Page Scraper (last resort for email) ───────
-    if not updates.get('email') and domain:
+    # ── Step 2.5: Apify Contact Page Scraper (always runs if we have a domain)
+    if domain:
         page_emails = scrape_contact_page_apify(domain)
-        if page_emails:
-            updates['email'] = page_emails[0]
-            updates['enrichment_data']['email_source'] = 'apify_contact_page'
-            updates['enrichment_data']['email_candidates'] = page_emails
-            logger.info(f"  Found {len(page_emails)} email(s) via contact page scraper: {page_emails}")
+        for em in page_emails:
+            all_candidates.append((em, 'apify_contact_page'))
+    
+    # ── Confidence Scoring: pick the best email ───────────────────────────
+    if all_candidates:
+        # Deduplicate while preserving best source
+        seen = {}
+        for em, src in all_candidates:
+            em_lower = em.lower()
+            if em_lower not in seen:
+                seen[em_lower] = (em, src)
+            else:
+                # Keep the one from the more reliable source
+                existing_src = seen[em_lower][1]
+                source_rank = {'apify_linkedin': 3, 'apify_contact_page': 2, 'serper': 1}
+                if source_rank.get(src, 0) > source_rank.get(existing_src, 0):
+                    seen[em_lower] = (em, src)
+        
+        # Score all unique candidates
+        scored = []
+        for em_lower, (em, src) in seen.items():
+            score = _score_email(em, name, domain, src)
+            scored.append((score, em, src))
+            logger.info(f"    Email candidate: {em} (source={src}, score={score})")
+        
+        # Sort by score descending
+        scored.sort(key=lambda x: x[0], reverse=True)
+        
+        best_score, best_email, best_source = scored[0]
+        updates['email'] = best_email
+        updates['enrichment_data']['email_source'] = best_source
+        updates['enrichment_data']['email_confidence'] = best_score
+        updates['enrichment_data']['email_candidates'] = [
+            {'email': em, 'source': src, 'confidence': sc}
+            for sc, em, src in scored
+        ]
+        logger.info(f"  ✅ Best email: {best_email} (source={best_source}, confidence={best_score})")
     
     # ── Step 3: Instagram via Serper ───────────────────────────────────────
     instagram = find_instagram_serper(name, role_keyword)
