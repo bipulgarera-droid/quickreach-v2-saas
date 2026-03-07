@@ -18,6 +18,7 @@ import requests
 import logging
 import time
 from datetime import datetime
+from typing import Optional
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -66,7 +67,7 @@ def guess_role_keyword(contact: dict) -> str:
     return ''
 
 
-def extract_domain_serper(company_name: str) -> str | None:
+def extract_domain_serper(company_name: str) -> Optional[str]:
     """Find the official website domain for a company using Serper."""
     if not SERPER_API_KEY or not company_name:
         return None
@@ -187,7 +188,7 @@ def _is_valid_email(email: str) -> bool:
     return not any(skip in email for skip in skip_patterns)
 
 
-def find_instagram_serper(name: str, role_keyword: str = '') -> str | None:
+def find_instagram_serper(name: str, role_keyword: str = '') -> Optional[str]:
     """
     Find Instagram handle via Serper search.
     Uses unquoted name + role keyword + site:instagram.com.
