@@ -633,6 +633,70 @@ def create_sequences():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/sequences/test', methods=['POST'])
+def send_test_sequence():
+    """Immediately send a test of Step 1 to provided email addresses."""
+    try:
+        data = request.json
+        project_id = data.get('project_id')
+        test_emails = data.get('test_emails', [])
+        
+        if not project_id:
+            return jsonify({'error': 'Project ID required'}), 400
+        if not test_emails:
+            return jsonify({'error': 'At least one test email required'}), 400
+            
+        # Get Step 1 Template
+        templates = supabase.table('email_templates').select('*').eq('project_id', project_id).order('step_number').limit(1).execute()
+        if not templates.data:
+            return jsonify({'error': 'No email templates found in this project to test.'}), 400
+            
+        template = templates.data[0]
+        
+        # Mock Variables
+        variables = {
+            'name': 'Test User',
+            'first_name': 'Test',
+            'company': 'ACME Corp',
+            'bio': 'Example Bio: Creating innovative software solutions.',
+            'icebreaker': 'I noticed your recent launch and was really impressed by the design.'
+        }
+        
+        subject = template['subject_template']
+        body = template['body_template']
+        
+        for key, val in variables.items():
+            subject = subject.replace(f'{{{{{key}}}}}', val)
+            body = body.replace(f'{{{{{key}}}}}', val)
+            
+        # Send via SMTP Pool
+        from execution.smtp_pool import SMTPPool
+        try:
+            pool = SMTPPool()
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 500
+            
+        results = []
+        for to_email in test_emails:
+            to_email = to_email.strip()
+            if not to_email: continue
+            
+            account = pool.get_next_account()
+            if not account:
+                results.append({'email': to_email, 'success': False, 'error': 'No available SMTP accounts remaining'})
+                continue
+                
+            res = pool.send_email(account, to_email, subject, body, dry_run=False)
+            res['email'] = to_email
+            results.append(res)
+            
+        return jsonify({'results': results})
+        
+    except Exception as e:
+        logger.error(f"Test sequence error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/sequences/send', methods=['POST'])
 def trigger_send():
     """Send pending scheduled emails."""
@@ -647,6 +711,22 @@ def trigger_send():
         return jsonify(stats)
     except Exception as e:
         logger.error(f"Send error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/sequences/check-replies', methods=['POST'])
+def check_replies():
+    """Check Gmail inboxes for prospect replies and auto-stop their sequences."""
+    try:
+        data = request.json or {}
+        days = data.get('days', 7)
+
+        from execution.check_replies import check_all_replies
+        stats = check_all_replies(days=days)
+
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"Reply check error: {e}")
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================

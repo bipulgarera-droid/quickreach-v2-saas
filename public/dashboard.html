@@ -659,7 +659,16 @@
             window.latestSequences = sequences;
 
             actions.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <button onclick="showTestSendModal()" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg transition-all">
+                        <i data-lucide="send" class="w-4 h-4 inline mr-1"></i> Test Workflow
+                    </button>
+                    <button onclick="checkReplies()" id="btnCheckReplies" class="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg transition-all">
+                        <i data-lucide="mail-check" class="w-4 h-4 inline mr-1"></i> Check Replies
+                    </button>
+                </div>
             `;
+            if (window.lucide) window.lucide.createIcons();
 
             // Group sequences by contact
             const grouped = {};
@@ -1050,6 +1059,103 @@
                 loadContent();
             } catch (e) {
                 showToast('❌ Error saving order: ' + e.message);
+            }
+        }
+
+        function showTestSendModal() {
+            openModal(`
+                <div class="p-6">
+                    <h2 class="text-xl font-bold text-white mb-2">Test Workflow</h2>
+                    <p class="text-sm text-gray-400 mb-4">Send your Step 1 template (with mock data) to up to 3 test emails to check inbox placement and formatting.</p>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Test Email 1</label>
+                            <input type="email" id="testEmail1" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white outline-none focus:border-emerald-500" placeholder="you@gmail.com">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Test Email 2 (optional)</label>
+                            <input type="email" id="testEmail2" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white outline-none focus:border-emerald-500" placeholder="you@yahoo.com">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Test Email 3 (optional)</label>
+                            <input type="email" id="testEmail3" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white outline-none focus:border-emerald-500" placeholder="you@outlook.com">
+                        </div>
+                    </div>
+                    <div class="mt-6 flex gap-3">
+                        <button onclick="closeModal()" class="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 rounded-lg transition-colors">Cancel</button>
+                        <button onclick="sendTestSequence()" id="btnTestSend" class="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium py-2 rounded-lg transition-colors shadow-lg">
+                            <span id="testSendText">Send Test</span>
+                        </button>
+                    </div>
+                </div>
+            `);
+        }
+
+        async function sendTestSequence() {
+            const emails = [
+                document.getElementById('testEmail1').value.trim(),
+                document.getElementById('testEmail2').value.trim(),
+                document.getElementById('testEmail3').value.trim()
+            ].filter(e => e);
+
+            if (!emails.length) return alert('Enter at least one test email.');
+
+            const btnText = document.getElementById('testSendText');
+            btnText.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1"></i> Sending...';
+            if (window.lucide) window.lucide.createIcons();
+
+            try {
+                const res = await fetch('/api/sequences/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ project_id: currentProjectId, test_emails: emails })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                const results = data.results || [];
+                const successCount = results.filter(r => r.success).length;
+                const failCount = results.filter(r => !r.success).length;
+
+                closeModal();
+                if (failCount) {
+                    showToast(`⚠️ ${successCount} sent, ${failCount} failed. Check SMTP settings.`);
+                } else {
+                    showToast(`✅ Test emails sent to ${successCount} address(es)! Check your inbox.`);
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+                btnText.innerText = 'Send Test';
+            }
+        }
+
+        async function checkReplies() {
+            const btn = document.getElementById('btnCheckReplies');
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1"></i> Scanning...';
+            if (window.lucide) window.lucide.createIcons();
+
+            try {
+                const res = await fetch('/api/sequences/check-replies', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ days: 7 })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                const found = data.replies_found || 0;
+                if (found > 0) {
+                    showToast(`📬 Found ${found} reply(ies)! Sequences auto-stopped for those contacts.`);
+                    loadContent(); // refresh the view
+                } else {
+                    showToast('📭 No new replies detected from active prospects.');
+                }
+            } catch (e) {
+                showToast('❌ Reply check error: ' + e.message);
+            } finally {
+                btn.innerHTML = origHtml;
+                if (window.lucide) window.lucide.createIcons();
             }
         }
 

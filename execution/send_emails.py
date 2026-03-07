@@ -82,6 +82,14 @@ def send_pending_emails(limit: int = 50, dry_run: bool = False) -> dict:
                 stats['skipped'] += 1
                 continue
             
+            # REPLY GUARD: Check if contact has replied — if so, cancel all their pending emails
+            contact_status = supabase.table('contacts').select('status').eq('id', seq['contact_id']).execute()
+            if contact_status.data and contact_status.data[0].get('status') == 'replied':
+                logger.info(f"Contact {to_email} has replied. Cancelling sequence {seq['id']} and all remaining steps.")
+                supabase.table('email_sequences').update({'status': 'cancelled'}).eq('contact_id', seq['contact_id']).eq('status', 'pending').execute()
+                stats['skipped'] += 1
+                continue
+            
             # Get next available email account
             account = pool.get_next_account()
             if not account:
