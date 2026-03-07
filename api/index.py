@@ -390,6 +390,32 @@ def generate_template():
         logger.error(f"Template generation error: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/api/templates/<int:template_id>', methods=['DELETE'])
+def delete_template(template_id):
+    """Delete an email template."""
+    try:
+        supabase.table('email_templates').delete().eq('id', template_id).execute()
+        return jsonify({'message': 'Template deleted successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/templates/reorder', methods=['PUT'])
+def reorder_templates():
+    """Update the step numbers for a list of template IDs."""
+    try:
+        data = request.json
+        template_ids = data.get('template_ids', [])
+        
+        # update the step_number for each based on index
+        for index, t_id in enumerate(template_ids):
+            supabase.table('email_templates').update({'step_number': index + 1}).eq('id', t_id).execute()
+            
+        return jsonify({'message': 'Templates reordered successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # =============================================================================
 # ROUTES — Email Sequences
 # =============================================================================
@@ -414,6 +440,20 @@ def list_sequences():
         
         result = query.order('created_at', desc=True).limit(100).execute()
         return jsonify({'sequences': result.data or []})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/sequences/<int:sequence_id>', methods=['PUT'])
+def update_sequence(sequence_id):
+    """Update a specific sequence step (e.g. manual edit)."""
+    try:
+        data = request.json
+        allowed = ['subject', 'body']
+        update_data = {k: v for k, v in data.items() if k in allowed}
+        
+        result = supabase.table('email_sequences').update(update_data).eq('id', sequence_id).execute()
+        return jsonify({'sequence': result.data[0] if result.data else None})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
