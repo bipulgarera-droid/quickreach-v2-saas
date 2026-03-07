@@ -131,6 +131,62 @@ def is_valid_contact(result: dict) -> bool:
     return any(ind in title for ind in person_indicators)
 
 
+def is_person_name(name: str) -> bool:
+    """
+    Validate that a string looks like an actual human name, not an org or article title.
+    Reject things like 'Sundance Film Fest News', 'Dear Fellow Film Programmers', etc.
+    """
+    if not name or len(name) < 3:
+        return False
+    
+    name_lower = name.lower().strip()
+    words = name_lower.split()
+    
+    # Too many words = probably a title/article, not a name
+    if len(words) > 5 or len(words) < 2:
+        return False
+    
+    # Reject if it starts with common non-name words
+    non_name_starts = [
+        'dear', 'the', 'a', 'an', 'all', 'our', 'my', 'your', 'this', 'that',
+        'how', 'why', 'what', 'when', 'where', 'who', 'which',
+        'top', 'best', 'new', 'free', 'meet', 'join', 'about',
+        'welcome', 'hello', 'hi', 'hey',
+    ]
+    if words[0] in non_name_starts:
+        return False
+    
+    # Reject if name contains org/brand/article indicator words
+    org_indicators = [
+        'news', 'festival', 'magazine', 'network', 'association', 'society',
+        'foundation', 'institute', 'university', 'college', 'school',
+        'company', 'inc', 'llc', 'ltd', 'corp', 'group', 'team',
+        'award', 'awards', 'prize', 'committee', 'board', 'council',
+        'fellow', 'fellows', 'programmers', 'directors', 'critics',
+        'review', 'reviews', 'journal', 'weekly', 'daily', 'times',
+        'international', 'world', 'global', 'national',
+        'underground', 'independent', 'online', 'digital',
+        'submissions', 'entries', 'open', 'call',
+    ]
+    if any(ind in words for ind in org_indicators):
+        return False
+    
+    # Reject if any word contains '#' or '@' (hashtag/social scraps)
+    if any('#' in w or '@' in w for w in words):
+        return False
+    
+    # Reject names that are all caps (typically acronyms/orgs like "TIFF" or "BFI")
+    if name == name.upper() and len(name) < 10:
+        return False
+    
+    # Each word in a real name should be mostly alphabetic
+    alpha_count = sum(1 for w in words if re.match(r'^[A-Za-z\'\-\.]+$', w))
+    if alpha_count < 2:
+        return False
+    
+    return True
+
+
 def parse_search_results(results: list[dict], source_query: str = '') -> list[dict]:
     """
     Parse raw Serper results into contact records.
@@ -173,8 +229,11 @@ def parse_search_results(results: list[dict], source_query: str = '') -> list[di
             name = title.split(' - ')[0].split(' | ')[0].strip()
             linkedin_url = None
         
-        # Skip if we couldn't extract a valid name
+        # Skip if we couldn't extract a valid name or it's not a person
         if not name or len(name) < 3:
+            continue
+        if not is_person_name(name):
+            logger.info(f"  Rejected non-person: '{name}'")
             continue
         
         # Deduplicate by name (case-insensitive)
