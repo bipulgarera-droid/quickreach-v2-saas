@@ -13,7 +13,8 @@ from flask import Flask, jsonify, request, render_template, redirect, send_file
 from flask_cors import CORS
 from dotenv import load_dotenv
 from pathlib import Path
-
+import requests
+from google import genai
 # Setup
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
@@ -43,8 +44,11 @@ SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
 
-supabase: Client = None
+supabase = None # using type hint as comment since Client might not be imported if unused elsewhere, but we have it above
 effective_key = SUPABASE_SERVICE_KEY or SUPABASE_KEY
+
+PERPLEXITY_API_KEY = os.getenv('PERPLEXITY_API_KEY')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 if SUPABASE_URL and effective_key:
     supabase = create_client(SUPABASE_URL, effective_key)
@@ -465,8 +469,8 @@ def update_sequence(sequence_id):
         return jsonify({'error': str(e)}), 500
 
 def paraphrase_text(text: str) -> str:
-    """Use Perplexity to paraphrase a text while preserving variables."""
-    if not PERPLEXITY_API_KEY:
+    """Use Gemini to paraphrase a text while preserving variables."""
+    if not GEMINI_API_KEY:
         return text
     try:
         system = """You are an expert copywriter. Paraphrase the following email body to avoid spam filters.
@@ -477,30 +481,20 @@ def paraphrase_text(text: str) -> str:
         2. DO NOT use HTML tags like <p> or <br>. Use standard text line breaks if needed.
         Return ONLY the rewritten text, nothing else."""
         
-        headers = {
-            "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        response = client.models.generate_content(
+            model='gemini-2.5-pro',
+            contents=system + "\n\nText to Paraphrase:\n" + text,
+        )
         
-        payload = {
-            "model": "sonar-pro",
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": text}
-            ]
-        }
-        
-        response = requests.post("https://api.perplexity.ai/chat/completions", headers=headers, json=payload, timeout=15)
-        response.raise_for_status()
-        
-        content = response.json()['choices'][0]['message']['content'].strip()
+        content = response.text.strip()
         # Clean up any markdown blocks if the AI ignored instructions
         if '```html' in content: content = content.split('```html')[1].split('```')[0].strip()
         elif '```' in content: content = content.split('```')[1].split('```')[0].strip()
         
         return content
     except Exception as e:
-        logger.error(f"Paraphrase error: {e}")
+        logger.error(f"Paraphrase error (Gemini): {e}")
         return text # fallback to original
 
 
