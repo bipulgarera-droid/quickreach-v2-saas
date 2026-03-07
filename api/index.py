@@ -850,24 +850,39 @@ def import_leads():
                 existing_emails.add(row['email'].lower())
         
         imported = 0
-        skipped = 0
+        skipped_duplicate = 0
+        skipped_no_contact = 0
         errors = 0
         
         contacts_to_insert = []
         
+        # Also fetch existing names for dedup when no email
+        existing_names_q = supabase.table('contacts').select('name').eq('project_id', project_id).execute()
+        existing_names = set()
+        for row in (existing_names_q.data or []):
+            if row.get('name'):
+                existing_names.add(row['name'].lower().strip())
+        
         for lead in leads:
             email = (lead.get('email') or '').strip()
+            name = (lead.get('name') or '').strip()
             
-            # Skip leads without email — can't send outreach without one
-            if not email:
-                skipped += 1
+            # Skip if no email AND no phone AND no instagram — truly no way to reach them
+            if not email and not lead.get('phone') and not lead.get('instagram'):
+                skipped_no_contact += 1
                 continue
             
-            # Deduplicate by email
-            if email.lower() in existing_emails:
-                skipped += 1
+            # Deduplicate: by email if available, otherwise by name
+            if email and email.lower() in existing_emails:
+                skipped_duplicate += 1
                 continue
-            existing_emails.add(email.lower())
+            if email:
+                existing_emails.add(email.lower())
+            elif name and name.lower() in existing_names:
+                skipped_duplicate += 1
+                continue
+            if name:
+                existing_names.add(name.lower())
             
             # Build enrichment_data JSON with all the extra GrowthScout data
             enrichment = lead.get('enrichment_data', {})
@@ -897,7 +912,7 @@ def import_leads():
                 'linkedin_url': lead.get('linkedin') or None,
                 'instagram': lead.get('instagram') or None,
                 'source': lead.get('category') or 'growthscout',
-                'status': 'enriched',  # Skip enrichment — already has email
+                'status': 'enriched' if email else 'new',  # enriched if has email, new if manual-only
                 'enrichment_data': json.dumps(enrichment),
             }
             
@@ -916,7 +931,9 @@ def import_leads():
         
         return jsonify({
             'imported': imported,
-            'skipped': skipped,
+            'skipped': skipped_duplicate + skipped_no_contact,
+            'skipped_duplicate': skipped_duplicate,
+            'skipped_no_contact': skipped_no_contact,
             'errors': errors,
             'total_received': len(leads)
         })
