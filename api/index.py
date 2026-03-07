@@ -408,7 +408,11 @@ def reorder_templates():
         data = request.json
         template_ids = data.get('template_ids', [])
         
-        # update the step_number for each based on index
+        # Pass 1: set to negative values to avoid unique constraint collisions
+        for index, t_id in enumerate(template_ids):
+            supabase.table('email_templates').update({'step_number': -(index + 1)}).eq('id', t_id).execute()
+            
+        # Pass 2: set to final positive values
         for index, t_id in enumerate(template_ids):
             supabase.table('email_templates').update({'step_number': index + 1}).eq('id', t_id).execute()
             
