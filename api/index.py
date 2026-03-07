@@ -640,6 +640,7 @@ def send_test_sequence():
         data = request.json
         project_id = data.get('project_id')
         test_emails = data.get('test_emails', [])
+        logger.info(f"Test send request: project_id={project_id}, test_emails={test_emails}")
         
         if not project_id:
             return jsonify({'error': 'Project ID required'}), 400

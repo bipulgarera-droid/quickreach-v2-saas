@@ -104,7 +104,7 @@ class SMTPPool:
             msg.attach(MIMEText(body_plain, "plain"))
             msg.attach(MIMEText(body_html, "html"))
 
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
                 server.ehlo()
                 server.starttls()
                 server.ehlo()
