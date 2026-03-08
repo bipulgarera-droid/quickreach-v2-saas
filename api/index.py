@@ -634,13 +634,27 @@ def create_sequences():
                 enrichment_data = {}
             
             for template in templates.data:
+                # Shorten company name for clean email personalization
+                def _shorten_company(name):
+                    if not name: return name
+                    import re
+                    # Strip common legal suffixes
+                    name = re.sub(r'\s*(LLC|Inc\.?|Corp\.?|Ltd\.?|LLP|Co\.?|P\.?C\.?|PLLC|Limited|Group|Holdings|International|Services|Solutions|Enterprises|Associates|Consulting|Organization|Foundation)\s*$', '', name, flags=re.IGNORECASE).strip().rstrip(',').strip()
+                    # If still too long, take first 3 meaningful words
+                    words = name.split()
+                    if len(words) > 4:
+                        name = ' '.join(words[:3])
+                    return name
+
+                raw_company = enrichment_data.get('company') or enrichment_data.get('linkedin_company') or contact.get('name', 'your company')
+                
                 # Render template with contact variables
                 variables = {
                     'name': contact.get('name', 'there'),
                     'first_name': contact.get('name', 'there').split()[0],
                     'bio': contact.get('bio', ''),
                     'icebreaker': contact.get('icebreaker', ''),
-                    'company': enrichment_data.get('company') or enrichment_data.get('linkedin_company') or contact.get('source', 'your company'),
+                    'company': _shorten_company(raw_company),
                     # LinkedIn enrichment fields for paraphraser context
                     'linkedin_headline': enrichment_data.get('linkedin_headline', ''),
                     'linkedin_company': enrichment_data.get('linkedin_company', ''),
