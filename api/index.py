@@ -640,6 +640,7 @@ def create_sequences():
                     'first_name': contact.get('name', 'there').split()[0],
                     'bio': contact.get('bio', ''),
                     'icebreaker': contact.get('icebreaker', ''),
+                    'company': enrichment_data.get('company') or enrichment_data.get('linkedin_company') or contact.get('source', 'your company'),
                     # LinkedIn enrichment fields for paraphraser context
                     'linkedin_headline': enrichment_data.get('linkedin_headline', ''),
                     'linkedin_company': enrichment_data.get('linkedin_company', ''),
@@ -908,6 +909,8 @@ def import_leads():
             
             # Store GrowthScout-specific data in enrichment_data
             enrichment['source_app'] = 'growthscout'
+            if lead.get('company'):
+                enrichment['company'] = lead['company']
             if lead.get('website'):
                 enrichment['website'] = lead['website']
             if lead.get('phone'):
