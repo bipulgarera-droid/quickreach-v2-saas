@@ -254,7 +254,14 @@ def daily_snapshot():
             
         pending_steps = result.data or []
         
-        # Deduplicate: only show the EARLIEST pending step per contact
+        # Fetch contacts that have already replied (exclude them entirely)
+        replied_result = supabase.table('email_sequences')\
+            .select('contact_id')\
+            .in_('status', ['replied', 'cancelled'])\
+            .execute()
+        replied_contact_ids = {r['contact_id'] for r in (replied_result.data or []) if r.get('contact_id')}
+        
+        # Deduplicate: only show the EARLIEST pending step per contact, exclude replied contacts
         seen_contacts = {}
         deduped = []
         for step in pending_steps:
@@ -262,6 +269,8 @@ def daily_snapshot():
             if not contact:
                 continue
             cid = step.get('contact_id')
+            if cid in replied_contact_ids:
+                continue  # Skip contacts who have already replied
             if cid not in seen_contacts:
                 seen_contacts[cid] = True
                 deduped.append(step)
