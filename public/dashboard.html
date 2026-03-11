@@ -901,11 +901,11 @@
                                                                 <td class="py-2 text-gray-500">${s.scheduled_at ? new Date(s.scheduled_at).toLocaleDateString() : '—'}</td>
                                                                 <td class="py-2 text-gray-500">${s.sent_at ? new Date(s.sent_at).toLocaleDateString() : '—'}</td>
                                                                 <td class="py-2">
-                                                                    ${s.status === 'pending' ? `
+                                                                    ${(s.status === 'pending' || s.status === 'sent') ? `
                                                                         <div class="flex gap-1 flex-wrap">
-                                                                            <button onclick="event.stopPropagation(); markSequenceStatus('${s.id}', 'sent')" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded hover:bg-emerald-900/50 hover:text-emerald-400 transition-colors" title="Mark as manually sent (Email)">✓ Email</button>
-                                                                            <button onclick="event.stopPropagation(); markSequenceStatus('${s.id}', 'sent', 'wa')" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded hover:bg-green-900/50 hover:text-green-400 transition-colors" title="Mark as manually sent (WhatsApp)">📱 WA</button>
-                                                                            <button onclick="event.stopPropagation(); markSequenceStatus('${s.id}', 'sent', 'ig')" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded hover:bg-pink-900/50 hover:text-pink-400 transition-colors" title="Mark as manually sent (Instagram)">📷 IG</button>
+                                                                            <button id="seq-btn-email-${s.id}" onclick="event.stopPropagation(); toggleSeqChannel('${s.id}', 'email', this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded transition-colors" title="Mark email sent">✉ Email</button>
+                                                                            <button id="seq-btn-wa-${s.id}" onclick="event.stopPropagation(); toggleSeqChannel('${s.id}', 'wa', this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded transition-colors" title="Mark WA sent">📱 WA</button>
+                                                                            <button id="seq-btn-ig-${s.id}" onclick="event.stopPropagation(); toggleSeqChannel('${s.id}', 'ig', this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded transition-colors" title="Mark IG sent">📷 IG</button>
                                                                             <button onclick="event.stopPropagation(); markSequenceStatus('${s.id}', 'replied')" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded hover:bg-amber-900/50 hover:text-amber-400 transition-colors" title="Mark as replied — cancels all future steps">↩ Replied</button>
                                                                         </div>
                                                                     ` : ''}
@@ -923,6 +923,7 @@
                     </table>
                 </div>
             `;
+            restoreSeqChannelColors();
         }
 
         // =========================================================================
@@ -1319,16 +1320,49 @@
             }
         }
 
-        async function markSequenceStatus(sequenceId, newStatus, channel = null) {
-            if (newStatus === 'replied') {
-                if (!confirm('This will mark the contact as REPLIED and cancel ALL remaining pending steps for them. Continue?')) return;
+        // Per-channel state: persisted in localStorage keyed by sequence step ID
+        const SEQ_CHANNEL_KEY = 'seq_channels';
+
+        function _getSeqChannels() {
+            try { return JSON.parse(localStorage.getItem(SEQ_CHANNEL_KEY) || '{}'); } catch { return {}; }
+        }
+
+        function _setSeqChannels(data) {
+            localStorage.setItem(SEQ_CHANNEL_KEY, JSON.stringify(data));
+        }
+
+        function toggleSeqChannel(stepId, channel, btn) {
+            const data = _getSeqChannels();
+            const key = `${stepId}:${channel}`;
+            const colors = { email: 'bg-violet-900/60 text-violet-300', wa: 'bg-emerald-900/60 text-emerald-300', ig: 'bg-pink-900/60 text-pink-300' };
+            if (data[key]) {
+                delete data[key];
+                btn.className = 'text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded transition-colors';
+            } else {
+                data[key] = true;
+                btn.className = `text-xs px-2 py-1 ${colors[channel] || 'bg-gray-700 text-white'} rounded transition-colors`;
             }
+            _setSeqChannels(data);
+        }
+
+        function restoreSeqChannelColors() {
+            const data = _getSeqChannels();
+            const colors = { email: 'bg-violet-900/60 text-violet-300', wa: 'bg-emerald-900/60 text-emerald-300', ig: 'bg-pink-900/60 text-pink-300' };
+            for (const key of Object.keys(data)) {
+                const [stepId, channel] = key.split(':');
+                const btn = document.getElementById(`seq-btn-${channel}-${stepId}`);
+                if (btn) btn.className = `text-xs px-2 py-1 ${colors[channel] || 'bg-gray-700 text-white'} rounded transition-colors`;
+            }
+        }
+
+        async function markSequenceStatus(sequenceId, newStatus, channel = null) {
+            // Email/WA/IG are now local-only toggles — only 'replied' hits the DB
+            if (newStatus !== 'replied') return;
+
+            if (!confirm('This will mark the contact as REPLIED and cancel ALL remaining pending steps for them. Continue?')) return;
 
             try {
                 const body = { status: newStatus };
-                if (newStatus === 'sent') body.sent_at = new Date().toISOString();
-                if (channel) body.manual_channel = channel;
-
                 const res = await fetch(`/api/sequences/${sequenceId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
@@ -1336,13 +1370,8 @@
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
-
-                if (newStatus === 'replied') {
-                    showToast('↩ Contact marked as replied. All future steps cancelled.');
-                } else {
-                    showToast('✓ Step marked as sent.');
-                }
-                loadContent(); // refresh
+                showToast('↩ Contact marked as replied. All future steps cancelled.');
+                loadContent(); // refresh only on replied
             } catch (e) {
                 showToast('❌ Error: ' + e.message);
             }
