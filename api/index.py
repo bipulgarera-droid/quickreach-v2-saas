@@ -232,6 +232,61 @@ def dashboard_stats():
         return jsonify({'error': str(e)}), 500
 
 # =============================================================================
+# ROUTES — Daily Snapshot
+# =============================================================================
+
+@app.route('/api/dashboard/daily-snapshot')
+def daily_snapshot():
+    """Get all pending sequence steps grouped by available manual/automatic channels."""
+    try:
+        now = datetime.utcnow().isoformat()
+        
+        # Get all pending steps due for sending
+        result = supabase.table('email_sequences')\
+            .select('id, subject, body, step_number, project_id, contacts(name, email, phone, instagram, linkedin_url)')\
+            .eq('status', 'pending')\
+            .lte('scheduled_at', now)\
+            .order('scheduled_at')\
+            .execute()
+            
+        pending_steps = result.data or []
+        
+        # Group them
+        snapshot = {
+            'automatic': [],
+            'manual_wa': [],
+            'manual_ig': []
+        }
+        
+        for step in pending_steps:
+            contact = step.get('contacts')
+            if not contact:
+                continue
+                
+            # If they have an email, they are strictly part of the automatic queue
+            if contact.get('email'):
+                snapshot['automatic'].append(step)
+            
+            # They can also be in manual queues if they have the respective details
+            if contact.get('phone'):
+                # Basic cleaning of phone for wa.me links
+                clean_phone = ''.join(filter(str.isdigit, contact['phone']))
+                if clean_phone:
+                    step['clean_phone'] = clean_phone
+                    snapshot['manual_wa'].append(step)
+                    
+            if contact.get('instagram'):
+                clean_ig = contact['instagram'].replace('@', '').strip()
+                if clean_ig:
+                    step['clean_ig'] = clean_ig
+                    snapshot['manual_ig'].append(step)
+                    
+        return jsonify({'snapshot': snapshot, 'total_pending': len(pending_steps)})
+    except Exception as e:
+        logger.error(f"Daily snapshot error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# =============================================================================
 # ROUTES — Contacts
 # =============================================================================
 
@@ -533,7 +588,7 @@ def update_sequence(sequence_id):
     """Update a specific sequence step (e.g. manual edit, mark sent/replied)."""
     try:
         data = request.json
-        allowed = ['subject', 'body', 'status', 'sent_at']
+        allowed = ['subject', 'body', 'status', 'sent_at', 'manual_channel']
         update_data = {k: v for k, v in data.items() if k in allowed}
         
         result = supabase.table('email_sequences').update(update_data).eq('id', sequence_id).execute()

@@ -273,6 +273,7 @@
 
         const TOP_TABS = [
             { id: 'dashboard', label: 'Dashboard', icon: 'layout-dashboard' },
+            { id: 'snapshot', label: 'Daily Snapshot', icon: 'sun' },
             { id: 'contacts', label: 'Contacts', icon: 'users' },
             { id: 'sequences', label: 'Sequences', icon: 'mail' },
             { id: 'pipeline', label: 'Pipeline', icon: 'git-branch' },
@@ -285,6 +286,9 @@
             'dashboard': [
                 { id: 'overview', label: 'Overview' },
                 { id: 'activity', label: 'Recent Activity' }
+            ],
+            'snapshot': [
+                { id: 'daily', label: 'Today\'s Summary' }
             ],
             'contacts': [
                 { id: 'all', label: 'All Contacts' },
@@ -476,6 +480,7 @@
 
             try {
                 if (currentTopTab === 'dashboard') await loadDashboard(area, actions);
+                else if (currentTopTab === 'snapshot') await loadSnapshot(area, actions);
                 else if (currentTopTab === 'contacts') await loadContacts(area, actions);
                 else if (currentTopTab === 'sequences') await loadSequences(area, actions);
                 else if (currentTopTab === 'pipeline') await loadPipeline(area);
@@ -557,6 +562,88 @@
                     </div>
                 `;
             }
+        }
+
+        // =========================================================================
+        // DAILY SNAPSHOT
+        // =========================================================================
+        async function loadSnapshot(area, actions) {
+            area.innerHTML = `<div class="flex justify-center mt-10"><i data-lucide="loader-2" class="w-6 h-6 animate-spin text-gray-400"></i></div>`;
+            lucide.createIcons();
+
+            try {
+                const res = await apiFetch('/api/dashboard/daily-snapshot');
+                const data = await res.json();
+                const snapshot = data.snapshot || { automatic: [], manual_wa: [], manual_ig: [] };
+
+                const autoCount = snapshot.automatic.length;
+                const waCount = snapshot.manual_wa.length;
+                const igCount = snapshot.manual_ig.length;
+
+                actions.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-400 bg-gray-800 px-2 py-1 rounded">Pending Total: ${data.total_pending || 0}</span>
+                    </div>
+                `;
+
+                area.innerHTML = `
+                    <div class="grid grid-cols-3 gap-4 mb-6">
+                        ${statCard('mail', 'violet', autoCount, 'Automatic Emails Pending')}
+                        ${statCard('message-circle', 'emerald', waCount, 'WhatsApp Pending')}
+                        ${statCard('instagram', 'pink', igCount, 'Instagram Pending')}
+                    </div>
+
+                    ${renderSnapshotList('WhatsApp Tasks', 'message-circle', 'text-emerald-400', snapshot.manual_wa, 'wa')}
+                    ${renderSnapshotList('Instagram Tasks', 'instagram', 'text-pink-400', snapshot.manual_ig, 'ig')}
+                `;
+                lucide.createIcons();
+            } catch (e) {
+                area.innerHTML = `<div class="text-red-400 p-4">Error loading snapshot: ${e.message}</div>`;
+            }
+        }
+
+        function renderSnapshotList(title, icon, iconColor, steps, channel) {
+            if (!steps || steps.length === 0) return '';
+
+            return `
+            <div class="bg-gray-900 border border-gray-800 rounded-xl mb-6">
+                <div class="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
+                    <i data-lucide="${icon}" class="w-4 h-4 ${iconColor}"></i>
+                    <h3 class="text-sm font-semibold text-white">${title}</h3>
+                </div>
+                <div class="p-4 space-y-4">
+                    ${steps.map(s => {
+                const contact = s.contacts || {};
+                const waLink = channel === 'wa' && s.clean_phone ? `https://wa.me/${s.clean_phone}` : '#';
+                const igLink = channel === 'ig' && s.clean_ig ? `https://instagram.com/${s.clean_ig}` : '#';
+                const actionUrl = channel === 'wa' ? waLink : igLink;
+                const btnColor = channel === 'wa' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-pink-600 hover:bg-pink-500';
+
+                return `
+                        <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-4 flex gap-4">
+                            <div class="flex-1">
+                                <h4 class="font-medium text-white mb-1"><a href="${actionUrl}" target="_blank" class="hover:underline">${contact.name || 'Unknown'}</a></h4>
+                                <p class="text-xs text-gray-400 mb-2">${contact.email || ''}</p>
+                                <div class="bg-gray-950 p-3 rounded text-sm text-gray-300">
+                                    <div class="font-medium text-white mb-2 pb-1 border-b border-gray-800">${s.subject}</div>
+                                    <div class="whitespace-pre-wrap">${s.body}</div>
+                                </div>
+                            </div>
+                            <div class="w-48 shrink-0 flex flex-col gap-2">
+                                <a href="${actionUrl}" target="_blank" class="text-center w-full ${btnColor} text-white px-3 py-2 rounded text-sm font-medium transition-colors">
+                                    Open ${channel.toUpperCase()}
+                                </a>
+                                <button onclick="markSequenceStatus('${s.id}', 'sent', '${channel}')" class="w-full bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors">
+                                    ✓ Mark as Sent
+                                </button>
+                                <button onclick="markSequenceStatus('${s.id}', 'replied')" class="w-full bg-gray-900 border border-amber-900/50 hover:bg-amber-900/30 text-amber-500 px-3 py-2 rounded text-sm font-medium transition-colors">
+                                    ↩ Mark Replied
+                                </button>
+                            </div>
+                        </div>`;
+            }).join('')}
+                </div>
+            </div>`;
         }
 
         // =========================================================================
@@ -760,13 +847,15 @@
                                                             <tr class="hover:bg-gray-800/20 cursor-pointer" onclick="editSequenceStep('${s.id}')" title="Click to edit email text">
                                                                 <td class="py-2 text-gray-400">Step ${s.step_number}</td>
                                                                 <td class="py-2 text-gray-300 max-w-[250px] truncate pr-4">${s.subject}</td>
-                                                                <td class="py-2"><span class="status-${s.status} px-1.5 py-0.5 rounded-sm">${s.status}</span></td>
+                                                                <td class="py-2"><span class="status-${s.status} px-1.5 py-0.5 rounded-sm">${s.status}${s.manual_channel ? ' (' + s.manual_channel.toUpperCase() + ')' : ''}</span></td>
                                                                 <td class="py-2 text-gray-500">${s.scheduled_at ? new Date(s.scheduled_at).toLocaleDateString() : '—'}</td>
                                                                 <td class="py-2 text-gray-500">${s.sent_at ? new Date(s.sent_at).toLocaleDateString() : '—'}</td>
                                                                 <td class="py-2">
                                                                     ${s.status === 'pending' ? `
-                                                                        <div class="flex gap-1">
-                                                                            <button onclick="event.stopPropagation(); markSequenceStatus('${s.id}', 'sent')" class="text-xs px-2 py-1 bg-emerald-900/50 text-emerald-400 rounded hover:bg-emerald-800/50 transition-colors" title="Mark as manually sent (IG/LinkedIn)">✓ Sent</button>
+                                                                        <div class="flex gap-1 flex-wrap">
+                                                                            <button onclick="event.stopPropagation(); markSequenceStatus('${s.id}', 'sent')" class="text-xs px-2 py-1 bg-emerald-900/50 text-emerald-400 rounded hover:bg-emerald-800/50 transition-colors" title="Mark as manually sent (Email)">✓ Email</button>
+                                                                            <button onclick="event.stopPropagation(); markSequenceStatus('${s.id}', 'sent', 'wa')" class="text-xs px-2 py-1 bg-green-900/50 text-green-400 rounded hover:bg-green-800/50 transition-colors" title="Mark as manually sent (WhatsApp)">📱 WA</button>
+                                                                            <button onclick="event.stopPropagation(); markSequenceStatus('${s.id}', 'sent', 'ig')" class="text-xs px-2 py-1 bg-pink-900/50 text-pink-400 rounded hover:bg-pink-800/50 transition-colors" title="Mark as manually sent (Instagram)">📷 IG</button>
                                                                             <button onclick="event.stopPropagation(); markSequenceStatus('${s.id}', 'replied')" class="text-xs px-2 py-1 bg-amber-900/50 text-amber-400 rounded hover:bg-amber-800/50 transition-colors" title="Mark as replied — cancels all future steps">↩ Replied</button>
                                                                         </div>
                                                                     ` : ''}
@@ -1180,7 +1269,7 @@
             }
         }
 
-        async function markSequenceStatus(sequenceId, newStatus) {
+        async function markSequenceStatus(sequenceId, newStatus, channel = null) {
             if (newStatus === 'replied') {
                 if (!confirm('This will mark the contact as REPLIED and cancel ALL remaining pending steps for them. Continue?')) return;
             }
@@ -1188,6 +1277,7 @@
             try {
                 const body = { status: newStatus };
                 if (newStatus === 'sent') body.sent_at = new Date().toISOString();
+                if (channel) body.manual_channel = channel;
 
                 const res = await fetch(`/api/sequences/${sequenceId}`, {
                     method: 'PUT',
