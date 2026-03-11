@@ -899,7 +899,7 @@
                                                                 <td class="py-2 text-gray-300 max-w-[250px] truncate pr-4">${s.subject}</td>
                                                                 <td class="py-2"><span id="seq-status-cell-${s.id}" class="status-${s.status} px-1.5 py-0.5 rounded-sm">${s.status}${s.manual_channel ? ' (' + s.manual_channel.toUpperCase() + ')' : ''}</span></td>
                                                                 <td class="py-2 text-gray-500">${s.scheduled_at ? new Date(s.scheduled_at).toLocaleDateString() : '—'}</td>
-                                                                <td class="py-2 text-gray-500">${s.sent_at ? new Date(s.sent_at).toLocaleDateString() : '—'}</td>
+                                                                <td class="py-2 text-gray-500" id="seq-sent-cell-${s.id}">${s.sent_at ? new Date(s.sent_at).toLocaleDateString() : '—'}</td>
                                                                 <td class="py-2">
                                                                     ${(s.status === 'pending' || s.status === 'sent') ? `
                                                                         <div class="flex gap-1 flex-wrap">
@@ -1334,15 +1334,19 @@
             btn.className = on ? `${CH_BASE} border ${CH_COLORS[channel] || 'bg-gray-700 text-white border-gray-600'}` : `${CH_BASE} bg-gray-800 text-gray-400 border border-gray-700`;
         }
 
-        async function _syncStatusToDB(stepId, status) {
+        async function _syncStatusToDB(stepId, status, sentAt = undefined) {
             const body = { status };
-            if (status === 'sent') body.sent_at = new Date().toISOString();
+            if (status === 'sent') body.sent_at = sentAt || new Date().toISOString();
+            if (status === 'pending') body.sent_at = null;
             await fetch(`/api/sequences/${stepId}`, {
                 method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
             });
-            // Update inline status badge in Status column
+            // Update Status column badge
             const badge = document.getElementById(`seq-status-cell-${stepId}`);
             if (badge) { badge.className = `status-${status} px-1.5 py-0.5 rounded-sm`; badge.textContent = status; }
+            // Update Sent column cell
+            const sentCell = document.getElementById(`seq-sent-cell-${stepId}`);
+            if (sentCell) sentCell.textContent = status === 'sent' ? new Date().toLocaleDateString() : '—';
             // Update data-db-status on all channel buttons
             ['email', 'wa', 'ig'].forEach(ch => {
                 const b = document.getElementById(`seq-btn-${ch}-${stepId}`);
@@ -1354,29 +1358,22 @@
             const data = _getSeqChannels();
             const key = `${stepId}:${channel}`;
             const wasDone = !!data[key];
-            const dbStatus = btn.dataset.dbStatus;
 
             if (wasDone) {
-                // UNDO
+                // UNDO this channel
                 delete data[key];
                 _applyBtnColor(btn, channel, false);
-                // If email was from DB (status=sent) and we're undoing email → revert to pending
-                if (channel === 'email' && dbStatus === 'sent') {
-                    await _syncStatusToDB(stepId, 'pending');
-                }
-                // If any channel was the last one holding a 'sent' DB state, revert too
-                const emailBtn = document.getElementById(`seq-btn-email-${stepId}`);
-                const allWereOn = emailBtn && emailBtn.dataset.dbStatus === 'sent';
-                if (allWereOn && channel !== 'email') {
+                // Revert to pending ONLY if ALL channels are now off
+                const anyOn = data[`${stepId}:email`] || data[`${stepId}:wa`] || data[`${stepId}:ig`];
+                if (!anyOn) {
                     await _syncStatusToDB(stepId, 'pending');
                 }
             } else {
-                // MARK DONE
+                // MARK DONE — any single channel done = step is sent (removes from daily snapshot)
                 data[key] = true;
                 _applyBtnColor(btn, channel, true);
-                // Check if all 3 are now on → mark DB as sent
-                const allOn = data[`${stepId}:email`] && data[`${stepId}:wa`] && data[`${stepId}:ig`];
-                if (allOn && dbStatus !== 'sent') {
+                const dbStatus = btn.dataset.dbStatus;
+                if (dbStatus !== 'sent') {
                     await _syncStatusToDB(stepId, 'sent');
                 }
             }
