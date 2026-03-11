@@ -237,14 +237,16 @@ def dashboard_stats():
 
 @app.route('/api/dashboard/daily-snapshot')
 def daily_snapshot():
-    """Get all pending sequence steps grouped by project for today + overdue."""
+    """Get all pending sequence steps grouped by project for today + overdue. One step per contact."""
     from datetime import timedelta
+    import json as json_mod
     try:
         ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
         date_str = ist_now.strftime('%Y-%m-%dT23:59:59')
+        today_str = ist_now.strftime('%Y-%m-%d')
         
         result = supabase.table('email_sequences')\
-            .select('id, subject, body, step_number, project_id, scheduled_at, contacts(name, email, enrichment_data), projects(name)')\
+            .select('id, contact_id, subject, body, step_number, project_id, scheduled_at, contacts(name, email, enrichment_data), projects(name)')\
             .eq('status', 'pending')\
             .lte('scheduled_at', date_str)\
             .order('scheduled_at')\
@@ -252,22 +254,32 @@ def daily_snapshot():
             
         pending_steps = result.data or []
         
-        # Group by project
-        projects = {}
-        
+        # Deduplicate: only show the EARLIEST pending step per contact
+        seen_contacts = {}
+        deduped = []
         for step in pending_steps:
             contact = step.get('contacts')
             if not contact:
                 continue
+            cid = step.get('contact_id')
+            if cid not in seen_contacts:
+                seen_contacts[cid] = True
+                deduped.append(step)
+        
+        # Group by project
+        projects = {}
+        
+        for step in deduped:
+            contact = step.get('contacts')
+            if not contact:
+                continue
                 
-            enrichment = contact.get('enrichment_data')
-            if enrichment and isinstance(enrichment, str):
-                import json
+            enrichment = contact.get('enrichment_data') or {}
+            if isinstance(enrichment, str):
                 try:
-                    enrichment = json.loads(enrichment)
+                    enrichment = json_mod.loads(enrichment)
                 except Exception:
                     enrichment = {}
-            enrichment = enrichment or {}
             
             raw_phone = enrichment.get('phone') or enrichment.get('phone_number')
             clean_phone = ''.join(filter(str.isdigit, str(raw_phone))) if raw_phone else None
@@ -275,8 +287,7 @@ def daily_snapshot():
             clean_ig = str(ig_handle).replace('@', '').strip() if ig_handle else None
             
             scheduled = step.get('scheduled_at', '')
-            today_str = ist_now.strftime('%Y-%m-%d')
-            is_overdue = scheduled < today_str if scheduled else False
+            is_overdue = bool(scheduled) and scheduled < today_str
             
             project_id = step.get('project_id')
             project_name = (step.get('projects') or {}).get('name', 'Unknown Project')

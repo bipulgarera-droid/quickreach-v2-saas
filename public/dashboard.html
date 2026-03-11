@@ -628,18 +628,12 @@
                                         </td>
                                         <td class="px-4 py-3">
                                             <div class="flex gap-1 flex-wrap" onclick="event.stopPropagation()">
-                                                ${s.contact_email ? `
-                                                <button onclick="markSnapshotDone('${s.id}', 'sent', null, this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded hover:bg-violet-900/40 hover:text-violet-300 hover:border-violet-800 transition-colors">✉ Email</button>
-                                                ` : ''}
-                                                ${s.clean_phone ? `
-                                                <a href="https://wa.me/${s.clean_phone}" target="_blank" onclick="event.stopPropagation()" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded hover:bg-emerald-900/40 hover:text-emerald-300 hover:border-emerald-800 transition-colors">📱 Open WA</a>
-                                                <button onclick="markSnapshotDone('${s.id}', 'sent', 'wa', this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded hover:bg-emerald-900/40 hover:text-emerald-300 hover:border-emerald-800 transition-colors">✓ WA Done</button>
-                                                ` : ''}
-                                                ${s.clean_ig ? `
-                                                <a href="https://instagram.com/${s.clean_ig}" target="_blank" onclick="event.stopPropagation()" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded hover:bg-pink-900/40 hover:text-pink-300 hover:border-pink-800 transition-colors">📷 Open IG</a>
-                                                <button onclick="markSnapshotDone('${s.id}', 'sent', 'ig', this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded hover:bg-pink-900/40 hover:text-pink-300 hover:border-pink-800 transition-colors">✓ IG Done</button>
-                                                ` : ''}
-                                                <button onclick="markSnapshotDone('${s.id}', 'replied', null, this)" class="text-xs px-2 py-1 bg-gray-800 text-amber-600 border border-gray-700 rounded hover:bg-amber-900/40 hover:text-amber-300 hover:border-amber-800 transition-colors">↩ Replied</button>
+                                                ${s.contact_email ? `<button id="btn-email-${s.id}" onclick="toggleChannelDone('${s.id}', 'email', this)" class="snap-btn text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded transition-colors">✉ Email</button>` : ''}
+                                                ${s.clean_phone ? `<a href="https://wa.me/${s.clean_phone}" target="_blank" onclick="event.stopPropagation()" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded hover:bg-emerald-900/40 hover:text-emerald-300 transition-colors">📱 WA</a>` : ''}
+                                                <button id="btn-wa-${s.id}" onclick="toggleChannelDone('${s.id}', 'wa', this)" class="snap-btn text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded transition-colors">✓ WA Done</button>
+                                                ${s.clean_ig ? `<a href="https://instagram.com/${s.clean_ig}" target="_blank" onclick="event.stopPropagation()" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded hover:bg-pink-900/40 hover:text-pink-300 transition-colors">📷 IG</a>` : ''}
+                                                <button id="btn-ig-${s.id}" onclick="toggleChannelDone('${s.id}', 'ig', this)" class="snap-btn text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded transition-colors">✓ IG Done</button>
+                                                <button onclick="markSnapshotDone('${s.id}', 'replied', null, this)" class="text-xs px-2 py-1 bg-gray-800 text-amber-600 border border-gray-700 rounded hover:bg-amber-900/40 hover:text-amber-400 transition-colors">↩ Replied</button>
                                             </div>
                                         </td>
                                     </tr>
@@ -661,10 +655,27 @@
             if (el) el.classList.toggle('hidden');
         }
 
+        // Track which buttons are toggled per row
+        const _snapDone = {};
+
+        function toggleChannelDone(id, channel, btn) {
+            const key = `${id}:${channel}`;
+            if (_snapDone[key]) {
+                // Undo
+                delete _snapDone[key];
+                btn.className = 'snap-btn text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded transition-colors';
+            } else {
+                // Mark done — just color the button, don't touch the row
+                _snapDone[key] = true;
+                const colors = { email: 'bg-violet-900/60 text-violet-300 border-violet-700', wa: 'bg-emerald-900/60 text-emerald-300 border-emerald-700', ig: 'bg-pink-900/60 text-pink-300 border-pink-700' };
+                btn.className = `snap-btn text-xs px-2 py-1 ${colors[channel] || 'bg-gray-700 text-white border-gray-600'} border rounded transition-colors`;
+            }
+        }
+
         async function markSnapshotDone(id, status, channel, btn) {
             if (btn) { btn.disabled = true; btn.textContent = '…'; }
             const payload = { status };
-            if (channel) payload.manual_channel = channel;
+            // Note: manual_channel column may not exist yet, only send status
             try {
                 const res = await apiFetch(`/api/sequences/${id}`, {
                     method: 'PUT',
@@ -672,10 +683,13 @@
                     body: JSON.stringify(payload)
                 });
                 if (!res.ok) throw new Error('Failed');
-                const row = document.getElementById(`snap-row-${id}`);
-                if (row) {
-                    row.style.opacity = '0.3';
-                    row.style.pointerEvents = 'none';
+                // Only fade the row when replied (removes it from workflow entirely)
+                if (status === 'replied') {
+                    const row = document.getElementById(`snap-row-${id}`);
+                    if (row) { row.style.opacity = '0.3'; row.style.pointerEvents = 'none'; }
+                } else if (btn) {
+                    btn.textContent = '✓ Done';
+                    btn.className = btn.className.replace('text-amber-600', 'text-emerald-400');
                 }
             } catch (e) {
                 if (btn) { btn.textContent = 'Error'; btn.disabled = false; }
