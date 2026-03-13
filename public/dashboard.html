@@ -1668,13 +1668,23 @@
         }
 
         async function runIcebreakers() {
-            if (!confirm('Generate icebreakers for enriched contacts? This uses Perplexity API credits.')) return;
-            showToast('Generating icebreakers...');
+            const ids = getSelectedContactIds();
+            const msg = ids.length > 0 
+                ? `Generate icebreakers for ${ids.length} selected contacts?`
+                : 'Generate icebreakers for ALL enriched contacts in this project?';
+                
+            if (!confirm(msg + ' This uses Perplexity API.')) return;
+            
+            showToast('Generating icebreakers in background...');
             try {
-                const res = await apiFetch('/api/contacts/icebreaker', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"limit":50}' });
+                const bodyPayload = ids.length > 0 ? { contact_ids: ids, limit: 1000 } : { limit: 1000 };
+                const res = await apiFetch('/api/contacts/icebreaker', { 
+                    method: 'POST', 
+                    body: JSON.stringify(bodyPayload)
+                });
                 const data = await res.json();
-                showToast(`✅ Generated ${data.generated} icebreakers`);
-                loadContent();
+                showToast(`✅ ${data.message || 'Started background generation'}`);
+                loadContent(); // Refresh to show "in progress" state
             } catch (e) { showToast('❌ ' + e.message); }
         }
 

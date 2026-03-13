@@ -123,12 +123,14 @@ Reply with ONLY the 2-sentence icebreaker, nothing else."""
     return None
 
 
-def generate_icebreakers_batch(limit: int = 50, dry_run: bool = False) -> dict:
+def generate_icebreakers_batch(limit: int = 50, project_id: str | None = None, contact_ids: list | None = None, dry_run: bool = False) -> dict:
     """
     Generate icebreakers for enriched contacts in batch.
     
     Args:
         limit: Max contacts to process
+        project_id: Optional project to scope the generation
+        contact_ids: Optional specific contacts to generate for
         dry_run: If True, don't update Supabase
     
     Returns:
@@ -146,7 +148,14 @@ def generate_icebreakers_batch(limit: int = 50, dry_run: bool = False) -> dict:
     supabase = create_client(supabase_url, supabase_key)
     
     # Fetch enriched contacts without icebreakers
-    result = supabase.table('contacts').select('*').eq('status', 'enriched').limit(limit).execute()
+    query = supabase.table('contacts').select('*').eq('status', 'enriched')
+    
+    if contact_ids:
+        query = query.in_('id', contact_ids)
+    elif project_id:
+        query = query.eq('project_id', project_id)
+        
+    result = query.limit(limit).execute()
     contacts = result.data or []
     
     logger.info(f"Found {len(contacts)} contacts needing icebreakers")

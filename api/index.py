@@ -474,15 +474,34 @@ def trigger_enrichment():
 
 @app.route('/api/contacts/icebreaker', methods=['POST'])
 def trigger_icebreakers():
-    """Generate icebreakers for enriched contacts."""
+    """Generate icebreakers for enriched contacts (runs asynchronously)."""
     try:
         data = request.json or {}
-        limit = data.get('limit', 50)
+        limit = data.get('limit', 1000)
+        project_id = data.get('project_id')
+        contact_ids = data.get('contact_ids')
         
         from execution.generate_icebreakers import generate_icebreakers_batch
-        stats = generate_icebreakers_batch(limit=limit)
+        import threading
         
-        return jsonify(stats)
+        def run_in_background():
+            try:
+                generate_icebreakers_batch(
+                    limit=limit, 
+                    project_id=project_id, 
+                    contact_ids=contact_ids
+                )
+            except Exception as e:
+                logger.error(f"Background icebreaker task failed: {e}")
+                
+        # Start background thread to avoid Gunicorn 30s timeout
+        thread = threading.Thread(target=run_in_background)
+        thread.start()
+        
+        return jsonify({
+            'message': 'Icebreaker generation started in the background. Give it a few minutes to process.',
+            'status': 'processing'
+        }), 202
     except Exception as e:
         logger.error(f"Icebreaker error: {e}")
         return jsonify({'error': str(e)}), 500
