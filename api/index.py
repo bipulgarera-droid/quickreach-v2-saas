@@ -712,7 +712,7 @@ def paraphrase_text(text: str, context: dict = None) -> str:
 
 @app.route('/api/sequences/create', methods=['POST'])
 def create_sequences():
-    """Create email sequences from templates for selected contacts."""
+    """Create email sequences from templates for selected contacts (runs asynchronously)."""
     try:
         data = request.json
         project_id = data.get('project_id')
@@ -721,91 +721,111 @@ def create_sequences():
         if not contact_ids or not project_id:
             return jsonify({'error': 'No contacts or project_id selected'}), 400
         
-        # Get templates
+        # Get templates synchronously to validate
         templates = supabase.table('email_templates').select('*').eq('project_id', project_id).order('step_number').execute()
         if not templates.data:
             return jsonify({'error': 'No email templates found. Seed them first.'}), 400
         
-        # Get contacts
+        # Get contacts synchronously to get the count
         contacts = supabase.table('contacts').select('*').in_('id', contact_ids).execute()
+        if not contacts.data:
+            return jsonify({'error': 'No valid contacts found.'}), 400
+            
+        import threading
         
-        created = 0
-        for contact in (contacts.data or []):
-            base_date = datetime.utcnow()
-            
-            # Parse enrichment_data for LinkedIn fields
-            enrichment_data = contact.get('enrichment_data')
-            if isinstance(enrichment_data, str):
-                try:
-                    import json as _json
-                    enrichment_data = _json.loads(enrichment_data)
-                except Exception:
-                    enrichment_data = {}
-            elif not isinstance(enrichment_data, dict):
-                enrichment_data = {}
-            
-            for template in templates.data:
-                # Shorten company name for clean email personalization
-                def _shorten_company(name):
-                    if not name: return name
-                    import re
-                    # Strip common legal suffixes
-                    name = re.sub(r'\s*(LLC|Inc\.?|Corp\.?|Ltd\.?|LLP|Co\.?|P\.?C\.?|PLLC|Limited|Group|Holdings|International|Services|Solutions|Enterprises|Associates|Consulting|Organization|Foundation)\s*$', '', name, flags=re.IGNORECASE).strip().rstrip(',').strip()
-                    # If still too long, take first 3 meaningful words
-                    words = name.split()
-                    if len(words) > 4:
-                        name = ' '.join(words[:3])
-                    return name
+        def run_in_background(proj_id, contacts_data, templates_data):
+            try:
+                created = 0
+                for contact in contacts_data:
+                    base_date = datetime.utcnow()
+                    
+                    # Parse enrichment_data for LinkedIn fields
+                    enrichment_data = contact.get('enrichment_data')
+                    if isinstance(enrichment_data, str):
+                        try:
+                            import json as _json
+                            enrichment_data = _json.loads(enrichment_data)
+                        except Exception:
+                            enrichment_data = {}
+                    elif not isinstance(enrichment_data, dict):
+                        enrichment_data = {}
+                    
+                    for template in templates_data:
+                        # Shorten company name for clean email personalization
+                        def _shorten_company(name):
+                            if not name: return name
+                            import re
+                            # Strip common legal suffixes
+                            name = re.sub(r'\s*(LLC|Inc\.?|Corp\.?|Ltd\.?|LLP|Co\.?|P\.?C\.?|PLLC|Limited|Group|Holdings|International|Services|Solutions|Enterprises|Associates|Consulting|Organization|Foundation)\s*$', '', name, flags=re.IGNORECASE).strip().rstrip(',').strip()
+                            # If still too long, take first 3 meaningful words
+                            words = name.split()
+                            if len(words) > 4:
+                                name = ' '.join(words[:3])
+                            return name
 
-                raw_company = enrichment_data.get('company') or enrichment_data.get('linkedin_company') or contact.get('name', 'your company')
-                
-                # Render template with contact variables
-                variables = {
-                    'name': contact.get('name', 'there'),
-                    'first_name': contact.get('name', 'there').split()[0],
-                    'bio': contact.get('bio', ''),
-                    'icebreaker': contact.get('icebreaker', ''),
-                    'company': _shorten_company(raw_company),
-                    # LinkedIn enrichment fields for paraphraser context
-                    'linkedin_headline': enrichment_data.get('linkedin_headline', ''),
-                    'linkedin_company': enrichment_data.get('linkedin_company', ''),
-                    'linkedin_title': enrichment_data.get('linkedin_title', ''),
-                    'linkedin_about': enrichment_data.get('linkedin_about', ''),
-                }
-                
-                subject = template['subject_template']
-                body = template['body_template']
-                
-                # AI Paraphrase for follow-up steps (Step 2+) to avoid spam filters
-                if template['step_number'] > 1:
-                    body = paraphrase_text(body, context=variables)
-                
-                for key, val in variables.items():
-                    subject = subject.replace(f'{{{{{key}}}}}', val)
-                    body = body.replace(f'{{{{{key}}}}}', val)
-                
-                scheduled = base_date + timedelta(days=template.get('delay_days', 0))
-                
-                supabase.table('email_sequences').insert({
-                    'project_id': project_id,
-                    'contact_id': contact['id'],
-                    'template_id': template['id'],
-                    'step_number': template['step_number'],
-                    'subject': subject,
-                    'body': body,
-                    'status': 'pending',
-                    'scheduled_at': scheduled.isoformat()
-                }).execute()
-                
-                created += 1
-            
-            # Update contact status
-            supabase.table('contacts').update({
-                'status': 'in_sequence',
-                'updated_at': datetime.utcnow().isoformat()
-            }).eq('id', contact['id']).execute()
+                        raw_company = enrichment_data.get('company') or enrichment_data.get('linkedin_company') or contact.get('name', 'your company')
+                        
+                        full_name = contact.get('name', 'there')
+                        # Don't split the name if it's meant to be a business team entity
+                        first_name = full_name if (' Team' in full_name or ' Business' in full_name or len(full_name.split()) == 1) else full_name.split()[0]
+                        
+                        # Render template with contact variables
+                        variables = {
+                            'name': full_name,
+                            'first_name': first_name,
+                            'bio': contact.get('bio', ''),
+                            'icebreaker': contact.get('icebreaker', ''),
+                            'company': _shorten_company(raw_company),
+                            # LinkedIn enrichment fields for paraphraser context
+                            'linkedin_headline': enrichment_data.get('linkedin_headline', ''),
+                            'linkedin_company': enrichment_data.get('linkedin_company', ''),
+                            'linkedin_title': enrichment_data.get('linkedin_title', ''),
+                            'linkedin_about': enrichment_data.get('linkedin_about', ''),
+                        }
+                        
+                        subject = template['subject_template']
+                        body = template['body_template']
+                        
+                        # AI Paraphrase for follow-up steps (Step 2+) to avoid spam filters
+                        if template['step_number'] > 1:
+                            body = paraphrase_text(body, context=variables)
+                        
+                        for key, val in variables.items():
+                            val_str = str(val) if val is not None else ''
+                            subject = subject.replace(f'{{{{{key}}}}}', val_str)
+                            body = body.replace(f'{{{{{key}}}}}', val_str)
+                        
+                        scheduled = base_date + timedelta(days=template.get('delay_days', 0))
+                        
+                        supabase.table('email_sequences').insert({
+                            'project_id': proj_id,
+                            'contact_id': contact['id'],
+                            'template_id': template['id'],
+                            'step_number': template['step_number'],
+                            'subject': subject,
+                            'body': body,
+                            'status': 'pending',
+                            'scheduled_at': scheduled.isoformat()
+                        }).execute()
+                        
+                        created += 1
+                    
+                    # Update contact status
+                    supabase.table('contacts').update({
+                        'status': 'in_sequence',
+                        'updated_at': datetime.utcnow().isoformat()
+                    }).eq('id', contact['id']).execute()
+            except Exception as e:
+                logger.error(f"Background sequence creation failed: {e}")
+
+        # Start thread
+        thread = threading.Thread(target=run_in_background, args=(project_id, contacts.data, templates.data))
+        thread.start()
         
-        return jsonify({'created': created, 'contacts': len(contacts.data or [])})
+        return jsonify({
+            'message': f'Started generating sequences for {len(contacts.data)} contacts in the background.',
+            'status': 'processing'
+        }), 202
     except Exception as e:
         logger.error(f"Create sequences error: {e}")
         return jsonify({'error': str(e)}), 500

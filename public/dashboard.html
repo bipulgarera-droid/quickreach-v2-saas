@@ -1714,7 +1714,7 @@
             if (!ids.length) return alert('Select contacts from the table to create sequences for them.');
             if (!confirm(`Create sequence for ${ids.length} selected contacts?`)) return;
 
-            showToast('Creating sequences for selected contacts...');
+            showToast('Creating sequences in background...');
             try {
                 const res = await apiFetch('/api/sequences/create', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1722,7 +1722,7 @@
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
-                showToast(`✅ Created ${data.created} sequences`);
+                showToast(`✅ ${data.message || 'Started background sequence generation'}`);
                 loadContent();
             } catch (e) { showToast('❌ ' + e.message); }
         }
