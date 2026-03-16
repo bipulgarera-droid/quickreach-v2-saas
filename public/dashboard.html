@@ -815,6 +815,9 @@
                     <button onclick="checkReplies()" id="btnCheckReplies" class="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg transition-all">
                         <i data-lucide="mail-check" class="w-4 h-4 inline mr-1"></i> Check Replies
                     </button>
+                    <button id="btnDeleteSelectedSeq" onclick="deleteSelectedSeqs()" class="hidden bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg transition-all">
+                        <i data-lucide="trash-2" class="w-4 h-4 inline mr-1"></i> Delete Selected
+                    </button>
                 </div>
             `;
             if (window.lucide) window.lucide.createIcons();
@@ -844,6 +847,7 @@
                     <table class="w-full">
                         <thead class="bg-gray-900/50 text-xs uppercase text-gray-400 border-b border-gray-800">
                             <tr>
+                                <th class="px-4 py-3 text-left font-medium w-8"><input type="checkbox" id="seqSelectAll" onchange="toggleSeqSelectAll()" class="rounded bg-gray-800 border-gray-600"></th>
                                 <th class="px-4 py-3 text-left font-medium w-8"></th>
                                 <th class="px-4 py-3 text-left font-medium">Contact</th>
                                 <th class="px-4 py-3 text-left font-medium">Email</th>
@@ -862,9 +866,12 @@
 
                 return `
                                     <!-- Main Contact Row -->
-                                    <tr class="hover:bg-gray-800/30 cursor-pointer" onclick="document.getElementById('seq-${cid}').classList.toggle('hidden')">
-                                        <td class="px-4 py-3 text-gray-500"><i data-lucide="chevron-down" class="w-4 h-4"></i></td>
-                                        <td class="px-4 py-3 font-medium text-white">${g.contact?.name || '—'}</td>
+                                    <tr class="hover:bg-gray-800/30" id="seq-row-${cid}">
+                                        <td class="px-4 py-3" onclick="event.stopPropagation()">
+                                            <input type="checkbox" class="seq-check rounded bg-gray-800 border-gray-600" value="${cid}" onchange="updateSeqDeleteBtn()">
+                                        </td>
+                                        <td class="px-4 py-3 text-gray-500 cursor-pointer" onclick="document.getElementById('seq-${cid}').classList.toggle('hidden')"><i data-lucide="chevron-down" class="w-4 h-4"></i></td>
+                                        <td class="px-4 py-3 font-medium text-white cursor-pointer" onclick="document.getElementById('seq-${cid}').classList.toggle('hidden')">${g.contact?.name || '—'}</td>
                                         <td class="px-4 py-3 text-gray-400">${g.contact?.email || '—'}</td>
                                         <td class="px-4 py-3 text-gray-400">
                                             <div class="flex items-center gap-2">
@@ -1729,6 +1736,43 @@
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
                 showToast(`✅ ${data.message || 'Started background sequence generation'}`);
+                loadContent();
+            } catch (e) { showToast('❌ ' + e.message); }
+        }
+
+        function toggleSeqSelectAll() {
+            const all = document.getElementById('seqSelectAll');
+            document.querySelectorAll('.seq-check').forEach(cb => cb.checked = all.checked);
+            updateSeqDeleteBtn();
+        }
+
+        function updateSeqDeleteBtn() {
+            const checked = [...document.querySelectorAll('.seq-check:checked')];
+            const btn = document.getElementById('btnDeleteSelectedSeq');
+            if (btn) {
+                if (checked.length > 0) {
+                    btn.classList.remove('hidden');
+                    btn.textContent = `Delete Selected (${checked.length})`;
+                } else {
+                    btn.classList.add('hidden');
+                }
+                if (window.lucide) window.lucide.createIcons();
+            }
+        }
+
+        async function deleteSelectedSeqs() {
+            const ids = [...document.querySelectorAll('.seq-check:checked')].map(cb => cb.value);
+            if (!ids.length) return;
+            if (!confirm(`Delete sequences for ${ids.length} contact(s)? Their status will be reset.`)) return;
+            showToast('Deleting...');
+            try {
+                let errors = 0;
+                for (const cid of ids) {
+                    const res = await apiFetch(`/api/sequences/contact/${cid}`, { method: 'DELETE' });
+                    const d = await res.json();
+                    if (d.error) errors++;
+                }
+                showToast(errors ? `⚠️ Done with ${errors} error(s)` : `✅ Deleted ${ids.length} sequence(s)`);
                 loadContent();
             } catch (e) { showToast('❌ ' + e.message); }
         }
