@@ -1268,6 +1268,8 @@ def import_leads():
                 'instagram': lead.get('instagram') or None,
                 'source': niche_val or lead.get('category') or 'growthscout',
                 'status': 'enriched' if email else 'new',
+                'location': location_val or None,
+                'niche': niche_val or None,
                 'enrichment_data': enrichment,
             }
             
