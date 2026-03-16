@@ -31,14 +31,58 @@ logger = logging.getLogger(__name__)
 
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 # We import google.genai inside the function to avoid global import errors if not installed
+SERPER_API_KEY = os.getenv('SERPER_API_KEY')
+
+
+def _fetch_website_context(name: str, location: str = None, website: str = None) -> str:
+    """
+    Use Serper to find the business website, then Jina to scrape it.
+    Returns scraped homepage text or empty string on failure.
+    """
+    try:
+        # Step 1: Build search query
+        query = name if not location else f"{name} {location}"
+        
+        # If we already have a website, skip Serper and go straight to scraping
+        target_url = website
+        
+        if not target_url and SERPER_API_KEY:
+            headers = {'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json'}
+            resp = requests.post('https://google.serper.dev/search', headers=headers,
+                                 json={'q': query, 'num': 3}, timeout=10)
+            resp.raise_for_status()
+            results = resp.json().get('organic', [])
+            for r in results:
+                link = r.get('link', '')
+                # Avoid directories, review sites etc
+                skip = ['yelp.com', 'tripadvisor.com', 'facebook.com', 'instagram.com', 'google.com', 'linkedin.com', 'twitter.com']
+                if link and not any(s in link for s in skip):
+                    target_url = link
+                    break
+
+        if not target_url:
+            return ''
+        
+        # Step 2: Scrape the website via Jina Reader
+        jina_url = f"https://r.jina.ai/{target_url}"
+        scrape_res = requests.get(jina_url, headers={'Accept': 'text/plain'}, timeout=20)
+        scrape_res.raise_for_status()
+        content = scrape_res.text[:3000]  # Keep first 3000 chars (plenty for icebreaker)
+        logger.info(f"Scraped website for {name} ({target_url}): {len(content)} chars")
+        return content
+        
+    except Exception as e:
+        logger.warning(f"Failed to fetch website context for {name}: {e}")
+        return ''
 
 
 def generate_icebreaker(name: str, bio: str, linkedin_url: str = None, enrichment_data: dict = None) -> str | None:
     """
-    Generate a personalized icebreaker using Perplexity API.
+    Generate a personalized icebreaker using Gemini 2.5 Pro.
+    First scrapes the business website via Serper + Jina to gather real context.
     
     Args:
-        name: Contact's full name
+        name: Contact's full name / business name
         bio: Their bio/description
         linkedin_url: Optional LinkedIn profile for context
         enrichment_data: Optional dict with LinkedIn-scraped profile fields
@@ -50,45 +94,54 @@ def generate_icebreaker(name: str, bio: str, linkedin_url: str = None, enrichmen
         logger.error("GEMINI_API_KEY not set")
         return None
     
-    context = f"Name: {name}"
+    if not isinstance(enrichment_data, dict):
+        enrichment_data = {}
+    
+    # Pull location and website from enrichment_data
+    location = enrichment_data.get('city') or enrichment_data.get('location') or enrichment_data.get('linkedin_location', '')
+    website = enrichment_data.get('website') or enrichment_data.get('domain', '')
+    
+    # Step 1: Scrape the business website for real context
+    web_content = _fetch_website_context(name, location=location, website=website)
+    
+    context = f"Business Name: {name}"
+    if location:
+        context += f"\nLocation: {location}"
     if bio:
         context += f"\nBio: {bio}"
     if linkedin_url:
         context += f"\nLinkedIn: {linkedin_url}"
     
     # Add rich LinkedIn data if available
-    if enrichment_data:
-        if enrichment_data.get('linkedin_headline'):
-            context += f"\nLinkedIn Headline: {enrichment_data['linkedin_headline']}"
-        if enrichment_data.get('linkedin_company'):
-            context += f"\nCurrent Company: {enrichment_data['linkedin_company']}"
-        if enrichment_data.get('linkedin_title'):
-            context += f"\nCurrent Title: {enrichment_data['linkedin_title']}"
-        if enrichment_data.get('linkedin_about'):
-            # Truncate very long bios to avoid blowing up the token limit
-            about = enrichment_data['linkedin_about'][:1500]
-            context += f"\nLinkedIn About: {about}"
-        if enrichment_data.get('linkedin_location'):
-            context += f"\nLocation: {enrichment_data['linkedin_location']}"
+    if enrichment_data.get('linkedin_headline'):
+        context += f"\nLinkedIn Headline: {enrichment_data['linkedin_headline']}"
+    if enrichment_data.get('linkedin_company'):
+        context += f"\nCurrent Company: {enrichment_data['linkedin_company']}"
+    if enrichment_data.get('linkedin_title'):
+        context += f"\nCurrent Title: {enrichment_data['linkedin_title']}"
+    if enrichment_data.get('linkedin_about'):
+        about = enrichment_data['linkedin_about'][:1500]
+        context += f"\nLinkedIn About: {about}"
     
-    prompt = f"""Generate a 1-2 sentence heavily personalized icebreaker for cold emailing this person.
-The icebreaker MUST observe or compliment something specific about their CURRENT job, current company, or most recent publicly shared achievement. 
-CRITICAL: Do NOT hallucinate or confuse their current job with past roles. Stick strictly to their present situation.
-CRITICAL: Do NOT mention your own project, film, business, or reason for reaching out. The icebreaker must be 100% about THEM and their work.
+    if web_content:
+        context += f"\n\nSCRAPED WEBSITE CONTENT:\n{web_content}"
+    
+    prompt = f"""Generate a 1-2 sentence personalized icebreaker for cold emailing this business.
+The icebreaker MUST reference something specific and REAL about what this business actually does, based on the scraped website content below.
+CRITICAL: Stick ONLY to what is in the scraped content. Do NOT assume or hallucinate anything.
+CRITICAL: Do NOT mention the sender's project, service, or reason for reaching out. 100% about THEM.
+CRITICAL: Do NOT mention any city or location unless it is explicitly mentioned in the data below.
 
-If you cannot find specific deep information, you MUST STILL provide a generic but warm, professional compliment about their company's industry footprint, recent growth, or apparent mission. 
-UNDER NO CIRCUMSTANCES should you say "I don't have enough information" or "I cannot write an icebreaker". Just write the best professional 1-2 sentence compliment you can given the name/company provided.
+Keep it warm and genuine. Example tone: "I noticed your team's incredible focus on..." or "The work you're doing at X with Y really stood out to me..."
 
-Keep it warm, genuine, and NOT salesy. No generic flattery ("you are the best"), instead acknowledge their space or effort ("I see the great work your team is doing in...").
-
-CRITICAL INSTRUCTIONS:
-1. NEVER include academic citations, footnotes, or bracketed numbers like [1] or [2] in your response.
-2. DO NOT use HTML tags like <p> or <br>. Use standard text line breaks if needed.
-3. NEVER apologize or state that you lack information. Just write the icebreaker.
+CRITICAL RULES:
+1. NEVER include citations, footnotes, or numbers in brackets like [1] or [2].
+2. NEVER refuse or say you lack information. Always write something warm and professional.
+3. NEVER add closing phrases like "Best," or "Regards," — just the icebreaker sentence(s).
 
 {context}
 
-Reply with ONLY the 2-sentence icebreaker, nothing else."""
+Reply with ONLY the icebreaker (1-2 sentences), nothing else."""
 
     try:
         from google import genai
@@ -96,14 +149,13 @@ Reply with ONLY the 2-sentence icebreaker, nothing else."""
         
         client = genai.Client(api_key=GEMINI_API_KEY)
         
-        system_instruction = 'You are an elite B2B and cold-email publicist writing personalized outreach emails. Be specific, accurate about their current role, warm, and concise.'
+        system_instruction = 'You are an elite cold-email publicist. Write personalized icebreakers that reference specific, real details from the provided website content. Never hallucinate.'
         
-        # Configure Gemini 2.5 Pro with Google Search tool so it avoids hallucinating generic business names
+        # No google_search grounding — we already scraped manually with Serper+Jina
         config = types.GenerateContentConfig(
             temperature=0.7,
-            max_output_tokens=200,
+            max_output_tokens=350,
             system_instruction=system_instruction,
-            tools=[{"google_search": {}}]
         )
         
         response = client.models.generate_content(
@@ -112,16 +164,15 @@ Reply with ONLY the 2-sentence icebreaker, nothing else."""
             config=config
         )
         
-        import re
-        
         if not response.text:
             logger.error(f"Gemini error for {name}: Response text is empty or blocked by safety filters.")
             return None
-            
+        
+        import re
+        
         icebreaker = response.text.strip()
-        # Forcefully strip out any citation brackets like [1] or [3] that the search tool injects
+        # Forcefully strip any citation brackets like [1] or [3]
         icebreaker = re.sub(r'\[\d+\]', '', icebreaker).strip()
-
         
         if icebreaker:
             logger.info(f"Generated icebreaker for {name}: {icebreaker[:80]}...")

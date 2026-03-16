@@ -49,6 +49,7 @@ effective_key = SUPABASE_SERVICE_KEY or SUPABASE_KEY
 
 PERPLEXITY_API_KEY = os.getenv('PERPLEXITY_API_KEY')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+SENDER_NAME = os.getenv('SENDER_NAME', 'Bipul')
 
 if SUPABASE_URL and effective_key:
     supabase = create_client(SUPABASE_URL, effective_key)
@@ -776,6 +777,9 @@ def create_sequences():
                             'bio': contact.get('bio', ''),
                             'icebreaker': contact.get('icebreaker', ''),
                             'company': _shorten_company(raw_company),
+                            # Sender variables (from .env SENDER_NAME)
+                            'sender_name': SENDER_NAME,
+                            'sender_first_name': SENDER_NAME.split()[0] if SENDER_NAME else 'Bipul',
                             # LinkedIn enrichment fields for paraphraser context
                             'linkedin_headline': enrichment_data.get('linkedin_headline', ''),
                             'linkedin_company': enrichment_data.get('linkedin_company', ''),
@@ -796,6 +800,12 @@ def create_sequences():
                             body = body.replace(f'{{{{{key}}}}}', val_str)
                         
                         scheduled = base_date + timedelta(days=template.get('delay_days', 0))
+                        
+                        # Dedup check: skip if sequence row already exists for this contact+template
+                        existing = supabase.table('email_sequences').select('id').eq('contact_id', contact['id']).eq('template_id', template['id']).execute()
+                        if existing.data:
+                            logger.info(f"Skipping duplicate sequence for contact {contact['id']} template {template['id']}")
+                            continue
                         
                         supabase.table('email_sequences').insert({
                             'project_id': proj_id,
