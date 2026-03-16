@@ -1771,34 +1771,81 @@
             } catch (e) { showToast('❌ ' + e.message); }
         }
 
+        // ── Sequence progress - localStorage backed, survives page reload ──
+
+        function _showSeqBanner(ids) {
+            let b = document.getElementById('seqProgressBanner');
+            if (!b) {
+                b = document.createElement('div');
+                b.id = 'seqProgressBanner';
+                b.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 border border-violet-500 rounded-2xl px-6 py-4 shadow-2xl min-w-[380px]';
+                document.body.appendChild(b);
+            }
+            b.innerHTML = `
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm text-white font-semibold flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full bg-violet-500 animate-pulse"></span> Creating sequences...</span>
+                    <span id="seqProgressCount" class="text-xs text-violet-400 font-mono">0 / ${ids.length}</span>
+                </div>
+                <div class="w-full bg-gray-800 rounded-full h-2 mb-2">
+                    <div id="seqProgressBar" class="bg-gradient-to-r from-violet-500 to-indigo-500 h-2 rounded-full transition-all duration-700" style="width:2%"></div>
+                </div>
+                <p class="text-xs text-gray-500">Each step is AI-paraphrased — safe to navigate away.</p>
+            `;
+            return b;
+        }
+
+        function _pollSeqProgress(ids) {
+            const total = ids.length;
+            const idSet = new Set(ids);
+            let done = false;
+            const poll = setInterval(async () => {
+                try {
+                    const r = await apiFetch('/api/sequences');
+                    const d = await r.json();
+                    const created = new Set((d.sequences || []).filter(s => idSet.has(s.contact_id)).map(s => s.contact_id)).size;
+                    const pct = Math.max(2, Math.min(100, Math.round((created / total) * 100)));
+                    const bar = document.getElementById('seqProgressBar');
+                    const cnt = document.getElementById('seqProgressCount');
+                    if (bar) bar.style.width = pct + '%';
+                    if (cnt) cnt.textContent = `${created} / ${total}`;
+                    if (created >= total) {
+                        clearInterval(poll);
+                        done = true;
+                        localStorage.removeItem('seqJob');
+                        const b = document.getElementById('seqProgressBanner');
+                        if (b) b.innerHTML = `<div class="flex items-center justify-between"><span class="text-emerald-400 font-semibold">\u2705 ${created} sequence(s) ready!</span><button onclick="document.getElementById('seqProgressBanner').remove()" class="text-gray-500 hover:text-white ml-4 text-xl leading-none">&times;</button></div>`;
+                        setTimeout(() => loadContent(), 600);
+                    }
+                } catch(_) {}
+            }, 6000);
+            setTimeout(() => {
+                if (!done) {
+                    clearInterval(poll);
+                    localStorage.removeItem('seqJob');
+                    const b = document.getElementById('seqProgressBanner');
+                    if (b) b.innerHTML = `<div class="flex items-center justify-between"><span class="text-yellow-400 font-semibold">\u26a0\ufe0f Still running \u2014 refresh to check.</span><button onclick="document.getElementById('seqProgressBanner').remove()" class="text-gray-500 hover:text-white ml-4 text-xl">&times;</button></div>`;
+                    loadContent();
+                }
+            }, 300000);
+        }
+
+        function resumeSeqProgressIfActive() {
+            try {
+                const job = JSON.parse(localStorage.getItem('seqJob') || 'null');
+                if (!job || !Array.isArray(job.ids) || !job.ids.length) return;
+                if (Date.now() - (job.started || 0) > 300000) { localStorage.removeItem('seqJob'); return; }
+                _showSeqBanner(job.ids);
+                _pollSeqProgress(job.ids);
+            } catch (_) {}
+        }
+
         async function createSequencesForSelected() {
             const ids = getSelectedContactIds();
             if (!ids.length) return alert('Select contacts from the table to create sequences for them.');
-            if (!confirm(`Create sequences for ${ids.length} contact(s)?\n\nNote: Each step is paraphrased uniquely per contact. This takes ~10-20 seconds per contact.`)) return;
+            if (!confirm(`Create sequences for ${ids.length} contact(s)?\n\nEach step is AI-paraphrased (~15-30s per contact). You can navigate away safely.`)) return;
 
-            // Show persistent progress banner
-            let progressBanner = document.getElementById('seqProgressBanner');
-            if (!progressBanner) {
-                progressBanner = document.createElement('div');
-                progressBanner.id = 'seqProgressBanner';
-                progressBanner.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 border border-violet-500 rounded-xl px-6 py-4 shadow-2xl flex items-center gap-4 min-w-[340px]';
-                document.body.appendChild(progressBanner);
-            }
-            progressBanner.innerHTML = `
-                <div class="flex-1">
-                    <div class="flex items-center justify-between mb-1">
-                        <span class="text-sm text-white font-medium">Creating sequences...</span>
-                        <span id="seqProgressCount" class="text-xs text-violet-400">0 / ${ids.length}</span>
-                    </div>
-                    <div class="w-full bg-gray-800 rounded-full h-1.5">
-                        <div id="seqProgressBar" class="bg-violet-500 h-1.5 rounded-full transition-all" style="width:0%"></div>
-                    </div>
-                </div>
-                <i data-lucide="loader-2" class="w-5 h-5 text-violet-400 animate-spin flex-shrink-0"></i>
-            `;
-            if (window.lucide) window.lucide.createIcons();
-            progressBanner.classList.remove('hidden');
-
+            localStorage.setItem('seqJob', JSON.stringify({ ids, started: Date.now() }));
+            _showSeqBanner(ids);
             try {
                 const res = await apiFetch('/api/sequences/create', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1806,45 +1853,12 @@
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
-
-                // Poll for progress every 4 seconds
-                let done = false;
-                let prevCount = 0;
-                const poll = setInterval(async () => {
-                    try {
-                        const r = await apiFetch('/api/sequences');
-                        const d = await r.json();
-                        const seqs = d.sequences || [];
-                        // Count unique contact_ids in the result that are in our selection
-                        const idSet = new Set(ids);
-                        const created = new Set(seqs.filter(s => idSet.has(s.contact_id)).map(s => s.contact_id)).size;
-                        const pct = Math.round((created / ids.length) * 100);
-                        const bar = document.getElementById('seqProgressBar');
-                        const cnt = document.getElementById('seqProgressCount');
-                        if (bar) bar.style.width = pct + '%';
-                        if (cnt) cnt.textContent = `${created} / ${ids.length}`;
-                        if (created >= ids.length && created > prevCount) {
-                            clearInterval(poll);
-                            done = true;
-                            progressBanner.innerHTML = `<span class="text-emerald-400 font-medium">✅ Sequences created for ${created} contact(s)!</span><button onclick="document.getElementById('seqProgressBanner').remove()" class="text-gray-500 hover:text-white ml-4">×</button>`;
-                            loadContent();
-                        }
-                        prevCount = created;
-                    } catch(_) {}
-                }, 4000);
-
-                // Auto-dismiss after 3 min if not done
-                setTimeout(() => {
-                    if (!done) {
-                        clearInterval(poll);
-                        progressBanner.innerHTML = `<span class="text-yellow-400 font-medium">⚠️ Still processing in background...</span><button onclick="document.getElementById('seqProgressBanner').remove()" class="text-gray-500 hover:text-white ml-4">×</button>`;
-                        loadContent();
-                    }
-                }, 180000);
-
+                _pollSeqProgress(ids);
             } catch (e) {
-                progressBanner.remove();
-                showToast('❌ ' + e.message);
+                const b = document.getElementById('seqProgressBanner');
+                if (b) b.remove();
+                localStorage.removeItem('seqJob');
+                showToast('\u274c ' + e.message);
             }
         }
 
@@ -2012,7 +2026,9 @@
         // BOOT
         // =========================================================================
         init();
-    </script>
+    
+        resumeSeqProgressIfActive();
+        </script>
 </body>
 
 </html>

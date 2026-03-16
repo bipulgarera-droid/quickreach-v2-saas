@@ -855,12 +855,20 @@ def create_sequences():
             import re as _re
             import json as _json
             
-            # Shorten company name for clean email personalization
-            def _shorten_company(name):
+            # Clean a business name: strip legal suffixes, Team/dash noise, trailing punctuation
+            def _clean_biz_name(name):
                 if not name: return name
+                # Strip Team/Business suffix with optional dash before it
+                name = _re.sub(r'\s*[-\u2013]?\s*(Team|Business|Staff|Group|Page|Hub|Official)\s*$', '', name, flags=_re.IGNORECASE).strip()
                 # Strip common legal suffixes
-                name = _re.sub(r'\s*(LLC|Inc\.?|Corp\.?|Ltd\.?|LLP|Co\.?|P\.?C\.?|PLLC|Limited|Group|Holdings|International|Services|Solutions|Enterprises|Associates|Consulting|Organization|Foundation)\s*$', '', name, flags=_re.IGNORECASE).strip().rstrip(',').strip()
-                # If still too long, take first 3 meaningful words
+                name = _re.sub(r'\s*(LLC|Inc\.?|Corp\.?|Ltd\.?|LLP|Co\.?|P\.?C\.?|PLLC|Limited|Holdings|International|Services|Solutions|Enterprises|Associates|Consulting|Organization|Foundation)\s*$', '', name, flags=_re.IGNORECASE).strip()
+                # Strip trailing dashes, pipes, commas
+                name = name.strip(' -|,').strip()
+                return name or name
+
+            def _shorten_company(name):
+                name = _clean_biz_name(name)
+                if not name: return name
                 words = name.split()
                 if len(words) > 4:
                     name = ' '.join(words[:3])
@@ -885,18 +893,19 @@ def create_sequences():
                     raw_company = enrichment_data.get('company') or enrichment_data.get('linkedin_company') or contact.get('name', 'your company')
                     
                     full_name = contact.get('name', 'there')
-                    # Clean the greeting name: strip trailing " - Team" / "- Business" patterns
-                    # so "Jasmine - Team" → "Jasmine" for the Hi {{first_name}} line
-                    greeting_name = _re.sub(r'\s*-\s*(Team|Business|Staff|Group|Page|Hub|Official)\s*$', '', full_name, flags=_re.IGNORECASE).strip()
-                    # If still a business-style name (has " Team"/" Business" or single word), keep it whole; else first word only
-                    first_name = greeting_name if (' Team' in greeting_name or ' Business' in greeting_name or len(greeting_name.split()) == 1) else greeting_name.split()[0]
+                    # Clean name: "Jasmine Spa - Team" → "Jasmine Spa" (strip dash + Team suffix)
+                    clean_biz = _clean_biz_name(full_name)
+                    # {{first_name}} for greeting: clean biz name WITHOUT Team (e.g. "Jasmine Spa")
+                    first_name = clean_biz if clean_biz else full_name
+                    # {{name}} for body: clean biz name + " Team" (mandatory, e.g. "Jasmine Spa Team")
+                    display_name = (clean_biz + ' Team') if clean_biz else full_name
                     
                     # Strip any leftover [N] citations from stored icebreaker
                     raw_icebreaker = contact.get('icebreaker', '') or ''
                     clean_icebreaker = _re.sub(r'\[\d+\]', '', raw_icebreaker).strip()
                     
                     variables = {
-                        'name': full_name,
+                        'name': display_name,
                         'first_name': first_name,
                         'bio': contact.get('bio', ''),
                         'icebreaker': clean_icebreaker,
