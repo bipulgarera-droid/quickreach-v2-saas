@@ -143,12 +143,13 @@ def generate_icebreaker(name: str, bio: str, linkedin_url: str = None, enrichmen
 
 CRITICAL RULES (non-negotiable):
 1. ALWAYS produce exactly 1-2 warm, genuine sentences. NEVER refuse. NEVER ask questions. NEVER say you lack information.
-2. If website content is provided, reference something SPECIFIC from it.
-3. If NO website content is provided, write a warm professional opener based on the business name — just keep it genuine and non-generic.
+2. If website content is provided, reference something SPECIFIC from it — a service, a product, a value, a philosophy.
+3. If NO website content is provided, write a warm professional opener based on the business name — keep it genuine.
 4. Do NOT mention the sender's service, product, or reason for reaching out. 100% about THEM.
 5. Do NOT include ANY citations, footnotes, or numbers in brackets like [1] or [2].
 6. Do NOT add closing phrases like "Best," or "Regards," — just the icebreaker sentence(s).
 7. Do NOT mention any city or location unless explicitly in the data below.
+8. NEVER mention awards, rankings, competitions, innovation titles, or achievements (e.g. "award-winning", "recognized", "top 10", "innovative company of the year") UNLESS those EXACT words appear in the scraped content below. If unsure, leave awards out entirely.
 {no_context_instruction}
 
 {context}
@@ -170,7 +171,7 @@ Reply with ONLY the icebreaker (1-2 sentences). No intro, no explanation, no que
         
         # No google_search grounding — we already scraped manually with Serper+Jina
         config = types.GenerateContentConfig(
-            temperature=0.7,
+            temperature=0.3,  # Low temp = less hallucination
             max_output_tokens=350,
             system_instruction=system_instruction,
         )
@@ -197,14 +198,22 @@ Reply with ONLY the icebreaker (1-2 sentences). No intro, no explanation, no que
             'please provide', 'more information', 'to write a', 'i would need',
             'i cannot', 'unfortunately', 'no information', 'not enough information',
         ]
+        # Detect hallucinated award/ranking claims not grounded in scraped content
+        hallucination_signals = [
+            'alongside nvidia', 'alongside spacex', 'innovative company winner',
+            'innovative company of the year', 'top 10', 'top 50', 'top 100',
+            'innovation award', 'award-winning recognition', '2026 winner',
+            '2025 winner', 'trailblazer award',
+        ]
         lower = icebreaker.lower()
         is_refusal = any(sig in lower for sig in refusal_signals) or icebreaker.endswith('?')
+        is_hallucination = any(sig in lower for sig in hallucination_signals)
         
-        if is_refusal:
-            # Build a safe generic fallback from the business name
+        if is_refusal or is_hallucination:
             business_display = search_name or name
+            reason = 'hallucination' if is_hallucination else 'refusal'
             icebreaker = f"The work the team at {business_display} is doing really caught our eye — it's clear you put genuine care into what you offer."
-            logger.warning(f"Refusal detected for {name}, using fallback icebreaker.")
+            logger.warning(f"{reason.capitalize()} detected for {name}, using fallback icebreaker.")
         
         if icebreaker:
             logger.info(f"Generated icebreaker for {name}: {icebreaker[:80]}...")
