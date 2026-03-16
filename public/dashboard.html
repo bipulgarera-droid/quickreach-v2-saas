@@ -1093,8 +1093,11 @@
                 <div class="mb-4 flex items-center justify-between">
                     <div>
                         <h3 class="text-lg font-semibold text-white">Sequence Builder</h3>
-                        <p class="text-xs text-gray-400">Available variables: <code class="text-violet-400 bg-gray-800 px-1 rounded">{{name}}</code> <code class="text-violet-400 bg-gray-800 px-1 rounded">{{first_name}}</code> <code class="text-violet-400 bg-gray-800 px-1 rounded">{{company}}</code> <code class="text-violet-400 bg-gray-800 px-1 rounded">{{sender_name}}</code> <code class="text-violet-400 bg-gray-800 px-1 rounded">{{sender_first_name}}</code></p>
+                        <p class="text-xs text-gray-400">Variables: <code class="text-violet-400 bg-gray-800 px-1 rounded">{{first_name}}</code> <code class="text-violet-400 bg-gray-800 px-1 rounded">{{name}}</code> <code class="text-violet-400 bg-gray-800 px-1 rounded">{{company}}</code> <code class="text-violet-400 bg-gray-800 px-1 rounded">{{sender_name}}</code> <code class="text-violet-400 bg-gray-800 px-1 rounded">{{sender_first_name}}</code></p>
                     </div>
+                    <button id="btnRegenAll" onclick="regenerateAllTemplates()" class="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Regenerate All
+                    </button>
                 </div>
                 <div class="space-y-4" id="templates-container">
                     ${templates.map(t => `
@@ -1155,28 +1158,40 @@
             }
         }
 
+        async function regenerateAllTemplates() {
+            if (!confirm('Regenerate ALL 4 templates from scratch using the project description? This will REPLACE all existing templates.')) return;
+            const btn = document.getElementById('btnRegenAll');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1"></i> Regenerating...'; if (window.lucide) window.lucide.createIcons(); }
+            showToast('🔁 Regenerating all 4 templates...');
+            try {
+                const res = await apiFetch('/api/templates/regenerate-all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                showToast('✅ All templates regenerated!');
+                loadContent();
+            } catch (e) {
+                showToast('❌ ' + e.message);
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="refresh-cw" class="w-4 h-4 inline mr-1"></i> Regenerate All'; }
+            }
+        }
+
         async function regenerateTemplateAI(id, stepNumber) {
-            // Use the current body as context so the rewrite respects edits the user has made
             const currentBody = document.getElementById(`t-body-${id}`).value.trim();
             const currentSubject = document.getElementById(`t-subject-${id}`).value.trim();
-
-            const mode = await new Promise(resolve => {
-                const choice = window.confirm(
-                    'Click OK to rewrite from your current template (recommended).\nClick Cancel to write a fresh email from scratch instead.'
-                );
-                resolve(choice ? 'rewrite' : 'scratch');
-            });
-
+            const rewrite = currentBody.length > 20;
             let promptText;
-            if (mode === 'rewrite') {
-                promptText = `Rewrite the following Step ${stepNumber} cold email so it has a fresh feel while keeping the same intent, CTA, and length.\n\nCurrent subject: ${currentSubject}\n\nCurrent body:\n${currentBody}`;
+            if (rewrite) {
+                promptText = `Rewrite this Step ${stepNumber} cold email with a fresh feel, same intent and length.\n\nSubject: ${currentSubject}\n\nBody:\n${currentBody}`;
             } else {
-                const custom = window.prompt(`Describe what Step ${stepNumber} should do (e.g. "A polite follow-up asking if they saw the audit")`);
+                const custom = window.prompt(`Describe what Step ${stepNumber} should do:`);
                 if (!custom) return;
                 promptText = custom + ` This is step ${stepNumber} in the sequence.`;
             }
-
-            showToast('🔁 Regenerating template...');
+            showToast('🔁 Regenerating...');
             try {
                 const res = await apiFetch('/api/templates/generate', {
                     method: 'POST',
@@ -1187,10 +1202,8 @@
                 if (data.error) throw new Error(data.error);
                 document.getElementById(`t-subject-${id}`).value = data.subject_template;
                 document.getElementById(`t-body-${id}`).value = data.body_template;
-                showToast('✅ Regenerated! Review and Save.');
-            } catch (e) {
-                showToast('❌ Regeneration error: ' + e.message);
-            }
+                showToast('✅ Done! Review and Save.');
+            } catch (e) { showToast('❌ ' + e.message); }
         }
 
         async function generateTemplateAI(id, stepNumber) {
@@ -1761,9 +1774,31 @@
         async function createSequencesForSelected() {
             const ids = getSelectedContactIds();
             if (!ids.length) return alert('Select contacts from the table to create sequences for them.');
-            if (!confirm(`Create sequence for ${ids.length} selected contacts?`)) return;
+            if (!confirm(`Create sequences for ${ids.length} contact(s)?\n\nNote: Each step is paraphrased uniquely per contact. This takes ~10-20 seconds per contact.`)) return;
 
-            showToast('Creating sequences in background...');
+            // Show persistent progress banner
+            let progressBanner = document.getElementById('seqProgressBanner');
+            if (!progressBanner) {
+                progressBanner = document.createElement('div');
+                progressBanner.id = 'seqProgressBanner';
+                progressBanner.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 border border-violet-500 rounded-xl px-6 py-4 shadow-2xl flex items-center gap-4 min-w-[340px]';
+                document.body.appendChild(progressBanner);
+            }
+            progressBanner.innerHTML = `
+                <div class="flex-1">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-sm text-white font-medium">Creating sequences...</span>
+                        <span id="seqProgressCount" class="text-xs text-violet-400">0 / ${ids.length}</span>
+                    </div>
+                    <div class="w-full bg-gray-800 rounded-full h-1.5">
+                        <div id="seqProgressBar" class="bg-violet-500 h-1.5 rounded-full transition-all" style="width:0%"></div>
+                    </div>
+                </div>
+                <i data-lucide="loader-2" class="w-5 h-5 text-violet-400 animate-spin flex-shrink-0"></i>
+            `;
+            if (window.lucide) window.lucide.createIcons();
+            progressBanner.classList.remove('hidden');
+
             try {
                 const res = await apiFetch('/api/sequences/create', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1771,9 +1806,46 @@
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
-                showToast(`✅ ${data.message || 'Started background sequence generation'}`);
-                loadContent();
-            } catch (e) { showToast('❌ ' + e.message); }
+
+                // Poll for progress every 4 seconds
+                let done = false;
+                let prevCount = 0;
+                const poll = setInterval(async () => {
+                    try {
+                        const r = await apiFetch('/api/sequences');
+                        const d = await r.json();
+                        const seqs = d.sequences || [];
+                        // Count unique contact_ids in the result that are in our selection
+                        const idSet = new Set(ids);
+                        const created = new Set(seqs.filter(s => idSet.has(s.contact_id)).map(s => s.contact_id)).size;
+                        const pct = Math.round((created / ids.length) * 100);
+                        const bar = document.getElementById('seqProgressBar');
+                        const cnt = document.getElementById('seqProgressCount');
+                        if (bar) bar.style.width = pct + '%';
+                        if (cnt) cnt.textContent = `${created} / ${ids.length}`;
+                        if (created >= ids.length && created > prevCount) {
+                            clearInterval(poll);
+                            done = true;
+                            progressBanner.innerHTML = `<span class="text-emerald-400 font-medium">✅ Sequences created for ${created} contact(s)!</span><button onclick="document.getElementById('seqProgressBanner').remove()" class="text-gray-500 hover:text-white ml-4">×</button>`;
+                            loadContent();
+                        }
+                        prevCount = created;
+                    } catch(_) {}
+                }, 4000);
+
+                // Auto-dismiss after 3 min if not done
+                setTimeout(() => {
+                    if (!done) {
+                        clearInterval(poll);
+                        progressBanner.innerHTML = `<span class="text-yellow-400 font-medium">⚠️ Still processing in background...</span><button onclick="document.getElementById('seqProgressBanner').remove()" class="text-gray-500 hover:text-white ml-4">×</button>`;
+                        loadContent();
+                    }
+                }, 180000);
+
+            } catch (e) {
+                progressBanner.remove();
+                showToast('❌ ' + e.message);
+            }
         }
 
         function toggleSeqSelectAll() {

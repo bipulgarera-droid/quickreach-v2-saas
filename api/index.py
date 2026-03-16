@@ -549,15 +549,16 @@ def generate_template():
         if not prompt:
             return jsonify({'error': 'Prompt is required'}), 400
             
-        system = """You are an expert cold email copywriter. Write a single sequence step based on the prompt.
+        system = """You are an expert cold email copywriter. Write a single cold email sequence step.
         Return ONLY valid JSON with 'subject' and 'body' keys.
-        You may use these variables: {{name}}, {{first_name}}, {{company}}.
-        Do NOT use {{icebreaker}} - it is no longer used.
-        Keep the email concise and natural.
+        Variables you may use: {{first_name}}, {{name}}, {{company}}, {{sender_name}}, {{sender_first_name}}.
+        Do NOT use {{icebreaker}} - it is not used.
+        Keep the email SHORT (3-5 sentences), concise, and natural. Goal: get a REPLY.
+        ALWAYS end the email body with a sign-off using {{sender_name}} or {{sender_first_name}}.
         CRITICAL INSTRUCTIONS:
-        1. NEVER include academic citations, footnotes, or bracketed numbers like [1] or [2] in your response.
-        2. DO NOT use HTML tags like <p> or <br>. Use standard text line breaks if needed.
-        3. ALWAYS return your entire response as a single, valid JSON block."""
+        1. NEVER include citations, footnotes, or bracketed numbers like [1] or [2].
+        2. NO HTML tags. Plain text line breaks only.
+        3. Return ONLY a single valid JSON block."""
         
         client = genai.Client(api_key=GEMINI_API_KEY)
         response = client.models.generate_content(
@@ -591,6 +592,91 @@ def delete_template(template_id):
         supabase.table('email_templates').delete().eq('id', template_id).execute()
         return jsonify({'message': 'Template deleted successfully'})
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/templates/regenerate-all', methods=['POST'])
+def regenerate_all_templates():
+    """Delete existing templates and regenerate the full 4-step drip from project description."""
+    try:
+        if not GEMINI_API_KEY:
+            return jsonify({'error': 'Gemini API key missing'}), 400
+        data = request.json
+        project_id = data.get('project_id')
+        if not project_id:
+            return jsonify({'error': 'project_id required'}), 400
+
+        # Fetch project description
+        proj = supabase.table('projects').select('name,description').eq('id', project_id).single().execute()
+        if not proj.data:
+            return jsonify({'error': 'Project not found'}), 404
+        name = proj.data.get('name', 'Unknown')
+        description = proj.data.get('description', '')
+        if not description:
+            return jsonify({'error': 'Project has no description. Edit the project first.'}), 400
+
+        system = f"""You are an elite cold-email copywriter for a project named "{name}".
+        The project is described as: "{description}".
+
+        Generate a 4-step cold email drip sequence. Create exactly 4 steps.
+
+        COLD EMAIL RULES:
+        - NEVER include links, URLs, or attachments
+        - Goal of every email: get a REPLY, not a click
+        - CTA: always a variation of "Want me to send the full report?" or "Can I share the details?"
+        - SHORT emails: 3-5 sentences max for the body
+        - End EVERY email body with a sign-off line: "Best,\n{{{{sender_name}}}}"
+
+        VARIABLES:
+        - {{{{first_name}}}} — contact's greeting name
+        - {{{{name}}}} — contact's full name
+        - {{{{company}}}} — contact's company
+        - {{{{sender_name}}}} — sender's name (always use this in sign-off)
+        Do NOT use {{{{icebreaker}}}}.
+
+        Step 1: warm generic opener about their business type → findings → CTA
+        Steps 2-3: short follow-ups re-emphasizing value
+        Step 4: polite break-up
+
+        Return ONLY a raw JSON array of exactly 4 objects, each with:
+        - "name" (short label: "Intro", "Follow up 1", "Nudge", "Break up")
+        - "subject_template"
+        - "body_template"
+        No markdown, no extra text."""
+
+        import json as _json
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        response = client.models.generate_content(
+            model='gemini-2.5-pro',
+            contents=system,
+        )
+        content = response.text.strip()
+        if '```json' in content: content = content.split('```json')[1].split('```')[0].strip()
+        elif '```' in content: content = content.split('```')[1].split('```')[0].strip()
+        steps = _json.loads(content)
+
+        # Delete old templates
+        supabase.table('email_templates').delete().eq('project_id', project_id).execute()
+
+        delays = [0, 3, 7, 14]
+        new_templates = []
+        for i, step in enumerate(steps[:4]):
+            row = {
+                'project_id': project_id,
+                'name': step.get('name', f'Step {i+1}'),
+                'step_number': i + 1,
+                'subject_template': step.get('subject_template', f'Follow up {i}'),
+                'body_template': step.get('body_template', ''),
+                'delay_days': delays[i] if i < len(delays) else 14
+            }
+            new_templates.append(row)
+        supabase.table('email_templates').insert(new_templates).execute()
+
+        # Fetch the newly created templates to return
+        result = supabase.table('email_templates').select('*').eq('project_id', project_id).order('step_number').execute()
+        return jsonify({'templates': result.data or [], 'message': 'All 4 templates regenerated'})
+    except Exception as e:
+        logger.error(f"Regenerate all templates error: {e}")
         return jsonify({'error': str(e)}), 500
 
 
