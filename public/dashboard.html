@@ -1537,10 +1537,16 @@
                 const res = await fetch('/api/daily-run', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ limit: 250, dry_run: false, project_id: currentProjectId })
+                    body: JSON.stringify({ limit: 300, dry_run: false, project_id: currentProjectId })
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
+
+                // Handle background start
+                if (data.status === 'started') {
+                    showToast('✅ Daily run dispatched in background. Check terminal logs for real-time progress!');
+                    return; 
+                }
 
                 const sent = data.email_send?.sent || 0;
                 const replies = data.reply_check?.replies_found || 0;
