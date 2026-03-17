@@ -36,8 +36,8 @@ DELAY_MIN = int(os.getenv('DELAY_MIN_SECONDS', 45))
 DELAY_MAX = int(os.getenv('DELAY_MAX_SECONDS', 90))
 
 
-def send_pending_emails(limit: int = 50, dry_run: bool = False, project_id: str = None) -> dict:
-    """Send all pending emails where scheduled_at <= now(). Filters by project_id if provided."""
+def send_pending_emails(limit: int = 50, dry_run: bool = False, project_id: str = None, contact_ids: list[str] = None) -> dict:
+    """Send all pending emails where scheduled_at <= now(). Filters by project_id and/or contact_ids if provided."""
     
     # Init Supabase
     from supabase import create_client
@@ -61,8 +61,12 @@ def send_pending_emails(limit: int = 50, dry_run: bool = False, project_id: str 
     now = datetime.utcnow().isoformat()
     query = supabase.table('email_sequences') \
         .select('*, contacts(name, email)') \
-        .eq('status', 'pending') \
-        .lte('scheduled_at', now) \
+        .eq('status', 'pending')
+        
+    if contact_ids:
+        query = query.in_('contact_id', contact_ids)
+    else:
+        query = query.lte('scheduled_at', now)
         
     if project_id:
         query = query.eq('project_id', project_id)

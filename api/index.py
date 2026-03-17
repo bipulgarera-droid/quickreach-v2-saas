@@ -14,6 +14,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from pathlib import Path
 import requests
+import threading
 from google import genai
 # Setup
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -1074,13 +1075,22 @@ def trigger_send():
         limit = data.get('limit', 50)
         dry_run = data.get('dry_run', False)
         project_id = data.get('project_id')
+        contact_ids = data.get('contact_ids') # For "Send Selected"
         
-        from execution.send_emails import send_pending_emails
-        stats = send_pending_emails(limit=limit, dry_run=dry_run, project_id=project_id)
+        def run_send():
+            try:
+                from execution.send_emails import send_pending_emails
+                send_pending_emails(limit=limit, dry_run=dry_run, project_id=project_id, contact_ids=contact_ids)
+            except Exception as e:
+                logger.error(f"Background send error: {e}")
+
+        thread = threading.Thread(target=run_send)
+        thread.daemon = True
+        thread.start()
         
-        return jsonify(stats)
+        return jsonify({'status': 'started', 'message': 'Email dispatch started in background.'})
     except Exception as e:
-        logger.error(f"Send error: {e}")
+        logger.error(f"Send trigger error: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1109,12 +1119,20 @@ def trigger_daily_run():
         dry_run = data.get('dry_run', False)
         project_id = data.get('project_id')
 
-        from execution.daily_run import daily_run
-        stats = daily_run(limit=limit, dry_run=dry_run, project_id=project_id)
+        def run_daily():
+            try:
+                from execution.daily_run import daily_run
+                daily_run(limit=limit, dry_run=dry_run, project_id=project_id)
+            except Exception as e:
+                logger.error(f"Background daily run error: {e}")
 
-        return jsonify(stats)
+        thread = threading.Thread(target=run_daily)
+        thread.daemon = True
+        thread.start()
+
+        return jsonify({'status': 'started', 'message': 'Daily workflow (reply check + send) started in background.'})
     except Exception as e:
-        logger.error(f"Daily run error: {e}")
+        logger.error(f"Daily run trigger error: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/smtp-capacity', methods=['GET'])
@@ -1127,9 +1145,8 @@ def get_smtp_capacity():
         try:
             pool = SMTPPool()
             account_count = len(pool.accounts)
-            max_capacity = account_count * pool.accounts[0].__class__.max_per_day if account_count > 0 else 0
             
-            # Since the pool object is ephemeral per request, we can just grab MAX_PER_DAY globally
+            # Use the global MAX_PER_DAY imported from smtp_pool
             from execution.smtp_pool import MAX_PER_DAY
             max_capacity = account_count * MAX_PER_DAY
         except Exception as e:

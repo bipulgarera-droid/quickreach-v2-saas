@@ -846,6 +846,9 @@
                     <button onclick="runDailySend()" id="btnDailyRun" class="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg transition-all">
                         <i data-lucide="play" class="w-4 h-4 inline mr-1"></i> Run Daily Send
                     </button>
+                    <button onclick="sendSelectedSequences()" id="btnSendSelected" class="bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-lg text-sm font-medium border border-gray-700 transition-all">
+                        <i data-lucide="send" class="w-4 h-4 inline mr-1"></i> Send Selected
+                    </button>
                     <button onclick="showTestSendModal()" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg transition-all">
                         <i data-lucide="send" class="w-4 h-4 inline mr-1"></i> Test Workflow
                     </button>
@@ -1563,6 +1566,41 @@
                 `);
             } catch (e) {
                 showToast('❌ Daily run error: ' + e.message);
+            } finally {
+                btn.innerHTML = origHtml;
+                btn.disabled = false;
+                if (window.lucide) window.lucide.createIcons();
+            }
+        }
+
+        async function sendSelectedSequences() {
+            const selectedIds = getSelectedContactIds();
+            if (!selectedIds.length) return alert('Select at least one sequence step to send.');
+            
+            if (!confirm(`Are you sure you want to send strictly the ${selectedIds.length} selected sequence steps now?`)) return;
+
+            const btn = document.getElementById('btnSendSelected');
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1"></i> Sending...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/sequences/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        project_id: currentProjectId, 
+                        contact_ids: selectedIds 
+                    })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                showToast(`✅ Successfully dispatched ${data.sent || 0} emails!`);
+                loadContent();
+                fetchSmtpCapacity();
+            } catch (e) {
+                showToast('❌ Send error: ' + e.message);
             } finally {
                 btn.innerHTML = origHtml;
                 btn.disabled = false;
