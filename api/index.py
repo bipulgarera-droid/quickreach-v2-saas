@@ -888,6 +888,9 @@ def create_sequences():
                 created = 0
                 errors = 0
                 try:
+                    # Per-thread supabase client — shared client is NOT thread-safe
+                    from supabase import create_client as _create_client
+                    _sb = _create_client(SUPABASE_URL, effective_key)
                     base_date = datetime.utcnow()
 
                     enrichment_data = contact.get('enrichment_data') or {}
@@ -927,7 +930,7 @@ def create_sequences():
                     for i, template in enumerate(templates_data):
                         try:
                             # Dedup check
-                            existing = supabase.table('email_sequences').select('id') \
+                            existing = _sb.table('email_sequences').select('id') \
                                 .eq('contact_id', contact['id']).eq('template_id', template['id']).execute()
                             if existing.data:
                                 logger.info(f"Skipping duplicate: contact {contact['id']} template {template['id']}")
@@ -943,7 +946,7 @@ def create_sequences():
 
                             scheduled = base_date + timedelta(days=template.get('delay_days', 0))
 
-                            supabase.table('email_sequences').insert({
+                            _sb.table('email_sequences').insert({
                                 'project_id': proj_id,
                                 'contact_id': contact['id'],
                                 'template_id': template['id'],
@@ -958,7 +961,7 @@ def create_sequences():
                             logger.error(f"Step {template.get('step_number')} for {contact.get('name')}: {step_e}")
                             errors += 1
 
-                    supabase.table('contacts').update({
+                    _sb.table('contacts').update({
                         'status': 'in_sequence',
                         'updated_at': datetime.utcnow().isoformat()
                     }).eq('id', contact['id']).execute()
