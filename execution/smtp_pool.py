@@ -71,6 +71,7 @@ class GmailAccount:
         self.credentials = self._build_credentials()
         self.service = build('gmail', 'v1', credentials=self.credentials, cache_discovery=False)
         
+    def _build_credentials(self) -> Credentials:
         # Instead of loading credentials.json, we load the non-sensitive client ID and Secret from .env
         # This allows the app to run on Railway without tracking credentials.json in Git,
         # and satisfies GitHub Push Protection.
