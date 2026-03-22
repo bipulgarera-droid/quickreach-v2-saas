@@ -7,8 +7,13 @@ Adapted for the Film Festival Outreach App.
 """
 
 import os
-import smtplib
+import os
 import time
+import base64
+from email.mime.text import MIMEText
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
@@ -41,14 +46,14 @@ def get_today_str() -> str:
 
 
 def _load_accounts_from_env() -> list[dict]:
-    """Load Gmail accounts from .env using GMAIL_N_EMAIL format."""
+    """Load Gmail accounts from .env using GMAIL_N_EMAIL and GMAIL_N_REFRESH_TOKEN format."""
     accounts = []
     for i in range(1, 20):
         email = os.getenv(f"GMAIL_{i}_EMAIL")
-        password = os.getenv(f"GMAIL_{i}_PASSWORD")
-        if not email or not password:
+        refresh_token = os.getenv(f"GMAIL_{i}_REFRESH_TOKEN")
+        if not email or not refresh_token:
             continue
-        accounts.append({"email": email.strip(), "app_password": password.strip()})
+        accounts.append({"email": email.strip(), "refresh_token": refresh_token.strip()})
     return accounts
 
 
@@ -56,13 +61,32 @@ class GmailAccount:
     """Represents a single Gmail account with send tracking."""
     max_per_day = MAX_PER_DAY
     
-    def __init__(self, email: str, app_password: str):
+    def __init__(self, email: str, refresh_token: str):
         self.email = email
-        self.app_password = app_password
+        self.refresh_token = refresh_token
         self.disabled = False
         self._sends_today_cache = 0
         self._sends_hour_cache = 0
         self._last_cache_update = None
+        self.credentials = self._build_credentials()
+        self.service = build('gmail', 'v1', credentials=self.credentials, cache_discovery=False)
+        
+    def _build_credentials(self) -> Credentials:
+        from pathlib import Path
+        import json
+        
+        # Load the client config we copied to credentials.json
+        cred_path = Path(__file__).resolve().parent.parent / 'credentials.json'
+        with open(cred_path, 'r') as f:
+            client_config = json.load(f)["installed"]
+        
+        return Credentials(
+            token=None,
+            refresh_token=self.refresh_token,
+            token_uri=client_config["token_uri"],
+            client_id=client_config["client_id"],
+            client_secret=client_config["client_secret"]
+        )
         
     def _fetch_sends_rolling_24h(self) -> int:
         """Count sends in the last rolling 24-hour window using smtp_send_logs."""
@@ -164,9 +188,9 @@ class SMTPPool:
     def __init__(self):
         accounts_data = _load_accounts_from_env()
         if not accounts_data:
-            raise ValueError("No Gmail accounts found. Add GMAIL_1_EMAIL to .env")
+            raise ValueError("No Gmail API accounts found. Add GMAIL_1_REFRESH_TOKEN to .env")
             
-        self.accounts = [GmailAccount(a["email"], a["app_password"]) for a in accounts_data]
+        self.accounts = [GmailAccount(a["email"], a["refresh_token"]) for a in accounts_data]
         self._index = 0
         logger.info(f"[SMTP Pool] Loaded {len(self.accounts)} accounts.")
 
@@ -239,14 +263,23 @@ class SMTPPool:
                 msg.attach(MIMEText(body_plain, "plain"))
                 msg.attach(MIMEText(body_formatted, "html"))
 
-                with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
-                    server.ehlo()
-                    server.starttls()
-                    server.ehlo()
-                    server.login(account.email, account.app_password)
-                    server.sendmail(account.email, to_addr, msg.as_string())
+                # Encode for Gmail API
+                raw_msg = base64.urlsafe_b64encode(msg.as_bytes()).decode()
 
-                logger.info(f"Email sent to {to_addr} from {account.email}")
+                try:
+                    account.service.users().messages().send(
+                        userId='me', 
+                        body={'raw': raw_msg}
+                    ).execute()
+                except Exception as e:
+                    error_msg = f"Gmail API error for {account.email}: {e}"
+                    logger.error(error_msg)
+                    if "invalid_grant" in str(e) or "auth" in str(e).lower() or "credentials" in str(e).lower() or "revoked" in str(e).lower():
+                        account.disabled = True
+                        logger.error(f"[!] Refresh token failed for {account.email}. Account disabled.")
+                    return {"success": False, "error": str(e)}
+
+                logger.info(f"Email sent via Gmail API to {to_addr} from {account.email}")
                 account.record_send()
                 # IMPORTANT: Only update last_send_time AFTER successful transmission.
                 # This ensures the inter-send delay (cadence) is measured from 
@@ -254,13 +287,8 @@ class SMTPPool:
                 SMTPPool._last_send_time = time.monotonic()
                 return {"success": True, "error": None}
 
-            except smtplib.SMTPAuthenticationError as e:
-                account.disabled = True
-                error_msg = f"Auth failed for {account.email} - account disabled: {e}"
-                logger.error(error_msg)
-                return {"success": False, "error": error_msg}
             except Exception as e:
-                error_msg = f"SMTP error for {account.email}: {e}"
+                error_msg = f"Unexpected error for {account.email}: {e}"
                 logger.error(error_msg)
                 return {"success": False, "error": error_msg}
 
