@@ -222,7 +222,7 @@ def daily_snapshot():
         today_str = ist_now.strftime('%Y-%m-%d')
         
         result = supabase.table('email_sequences')\
-            .select('id, contact_id, subject, body, step_number, project_id, scheduled_at, manual_channel, contacts(name, email, enrichment_data), projects(name)')\
+            .select('id, contact_id, subject, body, step_number, project_id, scheduled_at, manual_channel, contacts(name, email, instagram, enrichment_data), projects(name)')\
             .eq('status', 'pending')\
             .lte('scheduled_at', date_str)\
             .order('scheduled_at')\
@@ -268,7 +268,7 @@ def daily_snapshot():
             
             raw_phone = enrichment.get('phone') or enrichment.get('phone_number')
             clean_phone = ''.join(filter(str.isdigit, str(raw_phone))) if raw_phone else None
-            ig_handle = enrichment.get('instagram') or enrichment.get('instagram_handle')
+            ig_handle = contact.get('instagram') or enrichment.get('instagram') or enrichment.get('instagram_handle')
             clean_ig = str(ig_handle).replace('@', '').strip() if ig_handle else None
             
             scheduled = step.get('scheduled_at', '')
