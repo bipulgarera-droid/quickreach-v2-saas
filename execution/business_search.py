@@ -34,25 +34,30 @@ logger = logging.getLogger(__name__)
 # ─── Domains to skip — aggregators, directories, social platforms ─────────────
 SKIP_DOMAINS = {
     'linkedin.com', 'facebook.com', 'instagram.com', 'twitter.com', 'x.com',
-    'youtube.com', 'tiktok.com', 'pinterest.com',
+    'youtube.com', 'tiktok.com', 'pinterest.com', 'vimeo.com', 'behance.net',
     'yelp.com', 'clutch.co', 'g2.com', 'trustpilot.com', 'bbb.org',
-    'google.com', 'googleusercontent.com',
+    'google.com', 'googleusercontent.com', 'maps.google.com',
     'yellowpages.com', 'superpages.com', 'manta.com', 'dun.com', 'dnb.com',
     'crunchbase.com', 'zoominfo.com', 'apollo.io', 'rocketreach.co',
-    'wikipedia.org', 'wikimedia.org',
-    'reddit.com', 'quora.com', 'medium.com',
-    'indeed.com', 'glassdoor.com', 'ziprecruiter.com',
+    'wikipedia.org', 'wikimedia.org', 'imdb.com', 'm.imdb.com',
+    'reddit.com', 'quora.com', 'medium.com', 'blogspot.com', 'wordpress.com',
+    'indeed.com', 'glassdoor.com', 'ziprecruiter.com', 'naukri.com',
     'bloomberg.com', 'forbes.com', 'inc.com', 'entrepreneur.com',
     'hubspot.com', 'salesforce.com', 'mailchimp.com',
-    'ahrefs.com', 'moz.com',
+    'ahrefs.com', 'moz.com', 'semrush.com',
     'sortlist.com', 'upcity.com', 'expertise.com', 'goodfirms.co',
     'bark.com', 'thumbtack.com', 'angi.com', 'homeadvisor.com',
-    'tripadvisor.com', 'eventbrite.com',
+    'tripadvisor.com', 'eventbrite.com', 'meetup.com',
     'justdial.com', 'indiamart.com', 'sulekha.com', 'magicbricks.com', '99acres.com',
-    'zomato.com', 'swiggy.com', 'expedia.com', 'booking.com', 'naukri.com',
+    'zomato.com', 'swiggy.com', 'expedia.com', 'booking.com',
     'shiksha.com', 'collegeunion.in', 'collegedekho.com',
-    'amazon.com', 'ebay.com', 'etsy.com',
-    'shopify.com', 'wix.com', 'squarespace.com', 'wordpress.com',
+    'amazon.com', 'ebay.com', 'etsy.com', 'flipkart.com',
+    'scribd.com', 'pdfcoffee.com', 'slideshare.net', 'archive.org',
+    'bollywoodhungama.com', 'mumbailive.com', 'goodadsmatter.com', 'tring.co.in', 'f6s.com',
+    'shopify.com', 'wix.com', 'squarespace.com', 'weebly.com',
+    'medium.com', 'wordpress.com', 'blogspot.com', 'substack.com', 'tumblr.com',
+    'behance.net', 'dribbble.com', 'clutch.co', 'upcity.com', 'themanifest.com',
+    'linkedin.com', 'facebook.com', 'instagram.com', 'twitter.com', 'x.com', 'youtube.com'
 }
 
 def _extract_name_from_domain(url: str) -> str:
@@ -138,19 +143,59 @@ def _is_valid_business_url(url: str) -> bool:
     if domain in SKIP_DOMAINS:
         return False
         
-    # Skip obvious non-business paths or deep links that look like listicles/blogs
-    # Business homepages usually have very short paths
-    parsed = urlparse(url)
-    path = parsed.path.lower().rstrip('/')
+    # 3. Path-based listicle/aggregator rejection
+    reject_keywords = [
+        'best-', 'top-10', 'top-5', 'top-20', 'list-of', 'directory', 
+        'collection', 'index-of', 'companies-in', 'agencies-in', 
+        '/blog/', '/news/', '/careers/', '/jobs/', '/careers', '/jobs',
+        '/press/', '/category/', '/tag/', '/author/', '.pdf', '.doc', '.ppt',
+        '/portfolio/', '/projects/', '/work/', '/articles/', '/listings/'
+    ]
+    if any(k in path for k in reject_keywords):
+        return False
+        
+    # 4. Keyword rejection in domain (e.g. "top10mumbai.com")
+    if any(k.replace('-', '') in domain for k in ('top-10', 'best-of', 'list-of', 'blog', 'directory', 'listing')):
+        return False
+        
+    return True
+
+
+def _run_confidence_check(title: str, snippet: str, url: str, niche: str = "") -> bool:
+    """
+    Perform an 'Iron-Clad' confidence check on the search result.
+    Returns False if it looks like a blog, listicle, or aggregator.
+    """
+    text = (title + " " + (snippet or "")).lower()
     
-    # If it's a deep link with more than 2 segments and mentions 'best' or 'top', it's a listicle
-    if path.count('/') >= 2 and any(x in path for x in ('best', 'top', 'list')):
+    # 1. Reject Listicles/Aggregators by content
+    junk_patterns = [
+        'best ', 'top 10', 'top 5', 'top 20', 'list of', 'directory of', 
+        'companies in', 'agencies in', 'reviews of', 'ranking of',
+        'leading ', 'find the ', 'browse ', 'collection of', 'portfolio of',
+        'featured ', 'profiles of', 'people named', 'users named', 'top results'
+    ]
+    if any(p in text for p in junk_patterns):
         return False
         
-    reject_paths = ['/jobs/', '/careers/', '/blog/', '/news/', '/press/', '/category/', '/tag/', '/author/']
-    if any(p in path for p in reject_paths):
+    # 2. Reject Blogs/Portfolios by content
+    blog_patterns = [
+        'read more', 'posted on', 'written by', 'archives', 'category:', 
+        'tagged in', 'blog post', 'article by', 'portfolio site', 
+        'personal website', 'student at', 'freelancer', 'individual',
+        'my work', 'i am ', 'my name is'
+    ]
+    if any(p in text for p in blog_patterns):
         return False
-        
+
+    # 3. Niche Relevance Check
+    if niche:
+        # Split niche into core keywords (e.g. "production house" -> ["production", "house"])
+        niche_keywords = [k.strip() for k in niche.lower().split() if len(k.strip()) > 3]
+        # Basic check: at least one core niche keyword should be in the title or snippet
+        if not any(k in text for k in niche_keywords):
+            return False
+
     return True
 
 
@@ -179,9 +224,19 @@ def _clean_business_name(title: str, url: str = "") -> str:
     for sep in (' : ', ': ', ' | ', ' - ', ' – ', ' — ', ' · ', ' • '):
         if sep in title:
             name = title.split(sep)[0].strip()
-            if name.lower() in generic_titles and len(title.split(sep)) > 1:
+            # If the first part is a generic junk term, try the second part
+            if any(k in name.lower() for k in ('home', 'about', 'contact', 'services', 'top 10', 'best of', 'list of', 'bollywood hungama')) and len(title.split(sep)) > 1:
                 name = title.split(sep)[1].strip()
             break
+            
+    # 3. Final sanity check: if the name STILL contains junk keywords, it's a listicle, REJECT
+    junk_indicators = (
+        'top 10', 'top 5', 'top 20', 'best of', 'list of', 'agencies in', 
+        'companies in', 'production houses', 'directory', 'portfolio', 'blog', 
+        'about', 'contact', 'home', 'services', 'news', 'press'
+    )
+    if any(k in name.lower() for k in junk_indicators):
+        return "" # Returns empty to trigger rejection in the main loop
             
     # ─── SMART SPACING ───
     # A. CamelCase split
@@ -270,7 +325,7 @@ def _clean_business_name(title: str, url: str = "") -> str:
     return name
 
 
-def parse_business_results(results: list[dict], source_query: str = '') -> list[dict]:
+def parse_business_results(results: list[dict], source_query: str = '', niche: str = '') -> list[dict]:
     """
     Parse raw Serper results into business contact records.
     Returns list of dicts with: name, website (in enrichment_data), source, status.
@@ -287,6 +342,11 @@ def parse_business_results(results: list[dict], source_query: str = '') -> list[
             logger.info(f"  Skipping (directory/social): {url}")
             continue
 
+        # IRON-CLAD CONFIDENCE CHECK (Niche-Aware)
+        if not _run_confidence_check(title, snippet, url, niche):
+            logger.info(f"  Skipping (low confidence - likely blog/listicle/irrelevant): {url}")
+            continue
+
         domain = _get_root_domain(url)
         if domain in seen_domains:
             continue
@@ -297,19 +357,21 @@ def parse_business_results(results: list[dict], source_query: str = '') -> list[
             logger.info(f"  Skipping (no clean name): '{title}'")
             continue
 
-        # Normalise the website to just the homepage
+        # Normalize the website to just the homepage
         parsed = urlparse(url)
         website = f"{parsed.scheme}://{parsed.netloc}/"
 
         enrichment_data = {
             'website': website,
             'source': 'business_search',
+            'search_title': title,
+            'snippet': snippet
         }
 
         contact = {
             'name': name,
-            'company': name, # Populate the new company column
-            'bio': snippet[:300] if snippet else '',
+            'company': name,
+            'bio': snippet[:500] if snippet else '',
             'source': source_query,
             'source_url': url,
             'enrichment_data': json.dumps(enrichment_data),
@@ -329,8 +391,8 @@ def store_businesses(contacts: list[dict], project_id: str = None) -> dict:
     """
     from supabase import create_client
 
-    supabase_url = os.getenv('SUPABASE_URL')
-    supabase_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY') or os.getenv('SUPABASE_KEY')
+    supabase_url = 'https://rbkrtmzqubwrvkrvcebr.supabase.co'
+    supabase_key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJia3J0bXpxdWJ3cnZrcnZjZWJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NDM2MTAsImV4cCI6MjA4ODMxOTYxMH0.WMnotMf_h6wjT5DgZxhliTIdmxdl4DFjvHzfvI80QHA'
 
     if not supabase_url or not supabase_key:
         logger.error("Supabase credentials not configured")
@@ -417,9 +479,17 @@ def store_businesses(contacts: list[dict], project_id: str = None) -> dict:
     return stats
 
 
-def extract_and_store_businesses(results: list[dict], source_query: str = '', project_id: str = None) -> dict:
-    """Full pipeline: parse Serper results → deduplicate → store businesses."""
-    contacts = parse_business_results(results, source_query)
+def extract_and_store_businesses(results: list[dict], source_query: str = '', project_id: str = None, niche: str = '', location: str = '') -> dict:
+    """
+    Pipeline to parse and store businesses.
+    """
+    contacts = parse_business_results(results, source_query, niche)
+    # Add metadata to each contact
+    for c in contacts:
+        if niche: c['niche'] = niche
+        if location: c['location'] = location
+        if project_id: c['project_id'] = project_id
+    
     return store_businesses(contacts, project_id=project_id)
 
 
@@ -432,11 +502,12 @@ if __name__ == '__main__':
 
     from execution.serper_search import run_search_pipeline
     
+    logger.info(f"Starting business search for queries: {args.queries} (Target per query: {args.num})")
+    
     # We pass the full list of queries to serper
     results = run_search_pipeline(args.queries, args.num)
     
-    # results is a list of dicts from serper, which we need to split by original query if possible
-    # but run_search_pipeline usually returns a flattened list.
-    # We'll just pass the whole results list to extract and store.
+    logger.info(f"Serper returned {len(results)} raw results total.")
+    
     stats = extract_and_store_businesses(results, source_query=", ".join(args.queries), project_id=args.project_id)
     print(json.dumps(stats, indent=2))

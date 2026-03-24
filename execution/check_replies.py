@@ -223,39 +223,44 @@ def check_all_replies(days: int = 7) -> dict:
         all_replied.update(replied)
         all_bounced.update(bounced)
 
-    # Process updates
     for email in all_replied:
         cid = email_to_id.get(email)
         if cid:
-            supabase.table('contacts').update({'status': 'replied', 'updated_at': datetime.utcnow().isoformat()}).eq('id', cid).execute()
-            supabase.table('email_sequences').update({'status': 'cancelled'}).eq('contact_id', cid).eq('status', 'pending').execute()
-            logger.info(f"Marked {email} as REPLIED")
+            try:
+                supabase.table('contacts').update({'status': 'replied', 'updated_at': datetime.utcnow().isoformat()}).eq('id', cid).execute()
+                supabase.table('email_sequences').update({'status': 'cancelled'}).eq('contact_id', cid).eq('status', 'pending').execute()
+                logger.info(f"Marked {email} as REPLIED")
+            except Exception as e:
+                logger.warning(f"Failed to update status for replied email {email}: {e}")
 
     for email in all_bounced:
         cid = email_to_id.get(email)
         if cid:
-            # 1. Mark contact as bounced
-            supabase.table('contacts').update({'status': 'bounced', 'updated_at': datetime.utcnow().isoformat()}).eq('id', cid).execute()
-            
-            # 2. Mark the MOST RECENT SENT step as 'bounced' (for dashboard stats)
-            recent_sent = supabase.table('email_sequences') \
-                .select('id') \
-                .eq('contact_id', cid) \
-                .eq('status', 'sent') \
-                .order('sent_at', desc=True) \
-                .limit(1) \
-                .execute()
-            
-            if recent_sent.data:
-                seq_id = recent_sent.data[0]['id']
-                supabase.table('email_sequences') \
-                    .update({'status': 'bounced'}) \
-                    .eq('id', seq_id) \
+            try:
+                # 1. Mark contact as bounced
+                supabase.table('contacts').update({'status': 'bounced', 'updated_at': datetime.utcnow().isoformat()}).eq('id', cid).execute()
+                
+                # 2. Mark the MOST RECENT SENT step as 'bounced' (for dashboard stats)
+                recent_sent = supabase.table('email_sequences') \
+                    .select('id') \
+                    .eq('contact_id', cid) \
+                    .eq('status', 'sent') \
+                    .order('sent_at', desc=True) \
+                    .limit(1) \
                     .execute()
+                
+                if recent_sent.data:
+                    seq_id = recent_sent.data[0]['id']
+                    supabase.table('email_sequences') \
+                        .update({'status': 'bounced'}) \
+                        .eq('id', seq_id) \
+                        .execute()
 
-            # 3. Cancel all remaining pending sequences for this contact
-            supabase.table('email_sequences').update({'status': 'cancelled'}).eq('contact_id', cid).eq('status', 'pending').execute()
-            logger.info(f"Marked {email} as BOUNCED and cancelled pending steps")
+                # 3. Cancel all remaining pending sequences for this contact
+                supabase.table('email_sequences').update({'status': 'cancelled'}).eq('contact_id', cid).eq('status', 'pending').execute()
+                logger.info(f"Marked {email} as BOUNCED and cancelled pending steps")
+            except Exception as e:
+                logger.warning(f"Failed to update status for bounced email {email}: {e}")
 
     return {
         'monitored': len(prospect_emails),

@@ -101,7 +101,8 @@ def cleanup_generic_names(project_id=None):
             except: ed = {}
         else: ed = ed or {}
         
-        website = ed.get('website') or c.get('website')
+        # Priority: enrichment_data['website'] -> enrichment_data['url'] -> c['website'] -> c['source_url']
+        website = ed.get('website') or ed.get('url') or c.get('website') or c.get('source_url')
         
         if website:
             clean_brand = _extract_brand_from_url(website)

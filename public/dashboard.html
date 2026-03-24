@@ -438,6 +438,16 @@
                             <label class="block text-sm font-medium text-gray-400 mb-1">Project Name (e.g. SaaS Founders, Local Dentists)</label>
                             <input type="text" id="newProjectName" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white outline-none focus:border-violet-500" placeholder="My Outreach Campaign">
                         </div>
+                        <div class="flex flex-col md:flex-row gap-4 mb-4">
+                            <div class="flex-1">
+                                <label class="block text-sm font-medium text-gray-400 mb-1">NICHE</label>
+                                <input type="text" id="bulk-search-niche" class="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all" placeholder="e.g. production house">
+                            </div>
+                            <div class="flex-1">
+                                <label class="block text-sm font-medium text-gray-400 mb-1">LOCATION</label>
+                                <input type="text" id="bulk-search-location" class="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all" placeholder="e.g. Mumbai">
+                            </div>
+                        </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-400 mb-1">Project Description & Pitch</label>
                             <p class="text-xs text-violet-400 mb-2">Gemini AI will use this to automatically craft your initial campaign templates.</p>
@@ -463,6 +473,8 @@
             const name = document.getElementById('newProjectName').value.trim();
             const desc = document.getElementById('newProjectDesc').value.trim();
             const custom = document.getElementById('newProjectCustomInstructions').value.trim();
+            const niche = document.getElementById('bulk-search-niche').value.trim();
+            const location = document.getElementById('bulk-search-location').value.trim();
 
             if (!name) return alert('Enter a project name');
 
@@ -475,7 +487,7 @@
                 const res = await fetch('/api/projects', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, description: desc, custom_instructions: custom })
+                    body: JSON.stringify({ name, description: desc, custom_instructions: custom, niche, location })
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
@@ -866,10 +878,8 @@
                                 <th class="px-4 py-3 text-left font-medium">Name</th>
                                 <th class="px-4 py-3 text-left font-medium">Company</th>
                                 <th class="px-4 py-3 text-left font-medium text-cyan-400">Website</th>
-                                <th class="px-4 py-3 text-left font-medium">Bio</th>
+                                <th class="px-4 py-3 text-left font-medium">Phone</th>
                                 <th class="px-4 py-3 text-left font-medium">Email</th>
-                                <th class="px-4 py-3 text-left font-medium">LinkedIn</th>
-                                <th class="px-4 py-3 text-left font-medium">Instagram</th>
                                 <th class="px-4 py-3 text-left font-medium">Status</th>
                                 <th class="px-4 py-3 text-right font-medium">Actions</th>
                             </tr>
@@ -899,11 +909,16 @@
                                             } catch (e) { return '<span class="text-gray-600">—</span>'; } 
                                         })()}
                                     </td>
-                                    <td class="px-4 py-3 text-gray-400 max-w-[200px] truncate" title="${(c.bio || '').replace(/"/g, '&quot;')}">${c.bio || '—'}</td>
-                                    <td class="px-4 py-3 text-gray-300">${c.email || '<span class="text-gray-600">—</span>'}</td>
-                                    <td class="px-4 py-3">${c.linkedin_url ? `<a href="${c.linkedin_url}" target="_blank" class="text-blue-400 hover:text-blue-300"><i data-lucide="linkedin" class="w-4 h-4 inline"></i></a>` : '<span class="text-gray-600">—</span>'}</td>
-                                    <td class="px-4 py-3 text-pink-400">${c.instagram ? (c.instagram.startsWith('http') ? `<a href="${c.instagram}" target="_blank" class="hover:underline hover:text-pink-300">${c.instagram}</a>` : `<a href="https://instagram.com/${c.instagram.replace('@', '')}" target="_blank" class="hover:underline hover:text-pink-300">${c.instagram}</a>`) : '<span class="text-gray-500">—</span>'}</td>
-                                    <td class="px-4 py-3"><span class="status-${c.status} text-xs px-2 py-1 rounded-full">${c.status}</span></td>
+                                    <td class="px-4 py-3 text-gray-400 text-xs">${c.phone || '—'}</td>
+                                    <td class="px-4 py-3 text-gray-300">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="${c.email ? 'text-gray-300' : 'text-gray-600'}">${c.email || '—'}</span>
+                                            ${c.email ? `<button onclick="copyToClipboard('${c.email}', this)" class="text-gray-500 hover:text-white transition-colors"><i data-lucide="copy" class="w-3 h-3"></i></button>` : ''}
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 flex items-center gap-2">
+                                        <span class="status-${c.status} text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-current opacity-80">${c.status || 'new'}</span>
+                                    </td>
                                     <td class="px-4 py-3 text-right">
                                         <button onclick="showContactDetail('${c.id}')" class="text-gray-400 hover:text-white mr-2">
                                             <i data-lucide="eye" class="w-4 h-4 inline"></i>
@@ -966,7 +981,7 @@
                 try {
                     const r = await apiFetch(`/api/verify-jobs/${jobId}`);
                     const d = await r.json();
-                    const pct = Math.max(2, Math.min(100, Math.round(((d.done || 0) / total) * 100)));
+                    const pct = Math.max(2, Math.min(100, (d.done || 0) / total * 100));
                     const bar = document.getElementById('verifyProgressBar');
                     const cnt = document.getElementById('verifyProgressCount');
                     if (bar) bar.style.width = pct + '%';
@@ -1235,81 +1250,6 @@
             `;
         }
 
-        // =========================================================================
-        // SEARCH
-        // =========================================================================
-        async function loadSearch(area, actions) {
-            if (currentSideTab === 'new-search') {
-                area.innerHTML = `
-                    <div class="max-w-2xl">
-                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
-                            <h3 class="text-lg font-semibold text-white mb-4">Search Google via Serper API</h3>
-                            <p class="text-sm text-gray-400 mb-6">Enter search queries to discover film critics, festival programmers, and industry contacts. Each query will search Google and extract contact information.</p>
-                            <div class="space-y-3 mb-6" id="queryList">
-                                <div class="flex gap-2">
-                                    <input type="text" class="search-query-input flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:outline-none" 
-                                        value="programmer film festival site:linkedin.com" placeholder="Search query...">
-                                    <button onclick="this.closest('.flex').remove()" class="text-gray-400 hover:text-red-400 px-2"><i data-lucide="x" class="w-4 h-4"></i></button>
-                                </div>
-                                <div class="flex gap-2">
-                                    <input type="text" class="search-query-input flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:outline-none"
-                                        value="film critic India" placeholder="Search query...">
-                                    <button onclick="this.closest('.flex').remove()" class="text-gray-400 hover:text-red-400 px-2"><i data-lucide="x" class="w-4 h-4"></i></button>
-                                </div>
-                            <div class="flex gap-3 items-center mb-6">
-                                <label class="text-sm text-gray-400">Total Results to Fetch:</label>
-                                <select id="numResultsSelect" class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:border-violet-500">
-                                    <option value="10">10 results (Test run)</option>
-                                    <option value="100" selected>100 results (Standard)</option>
-                                    <option value="500">500 results (Deep search)</option>
-                                    <option value="1000">1,000 results (Bulk)</option>
-                                    <option value="10000">10,000 results (Max)</option>
-                                </select>
-                            </div>
-                            <div class="flex gap-3">
-                                <button onclick="addQueryRow()" class="bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-lg text-sm flex items-center gap-1.5">
-                                    <i data-lucide="plus" class="w-4 h-4"></i> Add Query
-                                </button>
-                                <button onclick="runSearch()" id="searchBtn" class="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-6 py-2 rounded-lg text-sm font-semibold flex items-center gap-1.5">
-                                    <i data-lucide="search" class="w-4 h-4"></i> Run Search
-                                </button>
-                            </div>
-                            <div id="searchStatus" class="mt-4 hidden"></div>
-                        </div>
-                    </div>
-                `;
-            } else {
-                // Search history
-                const res = await apiFetch('/api/search-runs');
-                const data = await res.json();
-                const runs = data.runs || [];
-
-                area.innerHTML = `
-                    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                        <table class="w-full">
-                            <thead class="bg-gray-900/50 text-xs uppercase text-gray-400 border-b border-gray-800">
-                                <tr>
-                                    <th class="px-4 py-3 text-left font-medium">Query</th>
-                                    <th class="px-4 py-3 text-left font-medium">Results</th>
-                                    <th class="px-4 py-3 text-left font-medium">Status</th>
-                                    <th class="px-4 py-3 text-left font-medium">Date</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-800 text-sm">
-                                ${runs.length ? runs.map(r => `
-                                    <tr class="hover:bg-gray-800/30">
-                                        <td class="px-4 py-3 text-white">${r.query}</td>
-                                        <td class="px-4 py-3 text-gray-300">${r.results_count}</td>
-                                        <td class="px-4 py-3"><span class="status-${r.status === 'completed' ? 'completed' : 'pending'} text-xs px-2 py-1 rounded-full">${r.status}</span></td>
-                                        <td class="px-4 py-3 text-gray-500 text-xs">${new Date(r.created_at).toLocaleString()}</td>
-                                    </tr>
-                                `).join('') : '<tr><td colspan="4" class="px-4 py-8 text-center text-gray-500">No searches yet</td></tr>'}
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-            }
-        }
 
         // =========================================================================
         // TEMPLATES
@@ -1771,7 +1711,7 @@
                 const res = await fetch('/api/daily-run', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ limit: 300, dry_run: false, project_id: currentProjectId })
+                    body: JSON.stringify({ limit: 600, dry_run: false, project_id: currentProjectId })
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
@@ -1817,7 +1757,7 @@
                     body: JSON.stringify({ 
                         project_id: currentProjectId, 
                         contact_ids: selectedIds,
-                        limit: 300
+                        limit: 600
                     })
                 });
                 const data = await res.json();
@@ -1981,9 +1921,32 @@
         // =========================================================================
         // ACTIONS
         // =========================================================================
+        function toggleSearchMode() {
+            const mode = document.getElementById('searchMode').value;
+            const locWrapper = document.getElementById('locationWrapper');
+            const queriesContainer = document.getElementById('queriesContainer');
+            
+            if (mode === 'maps') {
+                locWrapper.classList.remove('hidden');
+                // Ensure only one query for maps mode
+                const inputs = queriesContainer.querySelectorAll('.search-query-input');
+                if (inputs.length > 1) {
+                    for (let i = 1; i < inputs.length; i++) inputs[i].closest('.relative').remove();
+                }
+                document.getElementById('addQueryBtn')?.classList.add('hidden');
+            } else {
+                locWrapper.classList.add('hidden');
+                document.getElementById('addQueryBtn')?.classList.remove('hidden');
+            }
+        }
+
         async function runSearch() {
+            const mode = document.getElementById('searchMode').value;
             const queries = [...document.querySelectorAll('.search-query-input')].map(i => i.value).filter(Boolean);
+            const location = document.getElementById('searchLocation')?.value || '';
+            
             if (!queries.length) return alert('Add at least one search query');
+            if (mode === 'maps' && !location) return alert('Please enter a location for Maps search');
 
             const numResultsSelect = document.getElementById('numResultsSelect');
             const limit = numResultsSelect ? parseInt(numResultsSelect.value, 10) : 100;
@@ -1993,14 +1956,23 @@
             btn.disabled = true;
             btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Searching...';
             status.classList.remove('hidden');
-            status.innerHTML = '<div class="bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm rounded-lg p-3"><i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-2"></i>Searching Google via Serper API... This may take a moment.</div>';
+            
+            const apiEndpoint = mode === 'maps' ? '/api/contacts/apify-search' : '/api/contacts/search';
+            const body = mode === 'maps' 
+                ? { query: queries[0], location, num_results: limit, project_id: currentProjectId }
+                : { queries, num_results: limit, project_id: currentProjectId };
+
+            status.innerHTML = `<div class="bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm rounded-lg p-3">
+                <i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-2"></i>
+                Searching ${mode === 'maps' ? 'Google Maps via Apify' : 'Google via Serper'}... This may take a moment.
+            </div>`;
             lucide.createIcons();
 
             try {
-                const res = await apiFetch('/api/contacts/search', {
+                const res = await apiFetch(apiEndpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ queries, num_results: limit })
+                    body: JSON.stringify(body)
                 });
                 const data = await res.json();
 
@@ -2009,6 +1981,7 @@
                 status.innerHTML = `<div class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm rounded-lg p-3">
                     ✅ Search complete! Found ${data.total_results} results. Inserted ${data.inserted} new contacts (${data.skipped} duplicates skipped).
                 </div>`;
+                loadContent(); // Refresh list to show new contacts
             } catch (e) {
                 status.innerHTML = `<div class="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg p-3">❌ Error: ${e.message}</div>`;
             }
@@ -2514,30 +2487,59 @@
         // =========================================================================
         // SEARCH TAB
         // =========================================================================
+        function toggleSearchMode() {
+            const mode = document.getElementById('searchMode').value;
+            const wrapper = document.getElementById('locationWrapper');
+            const addBtn = document.getElementById('addQueryBtn');
+            const queries = document.getElementById('queryList');
+            
+            if (mode === 'maps') {
+                wrapper.classList.remove('hidden');
+                addBtn.classList.add('hidden');
+                // Limit to 1 query for maps search
+                const rows = queries.querySelectorAll('.flex');
+                if (rows.length > 1) {
+                    for (let i = 1; i < rows.length; i++) rows[i].remove();
+                }
+            } else {
+                wrapper.classList.add('hidden');
+                addBtn.classList.remove('hidden');
+            }
+        }
+
         async function loadSearch(area, actions) {
             const isPeopleMode = (window._searchMode || 'people') === 'people';
 
             area.innerHTML = `
                 <div class="max-w-2xl">
                     <!-- Mode toggle -->
-                    <div class="flex gap-2 mb-6 bg-gray-900 border border-gray-800 rounded-xl p-1.5 w-fit">
-                        <button id="modePeople"
-                            onclick="window._searchMode='people'; loadContent()"
-                            class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${isPeopleMode
-                                ? 'bg-violet-600 text-white shadow'
-                                : 'text-gray-400 hover:text-white'}">
-                            👤 People
-                        </button>
-                        <button id="modeBiz"
-                            onclick="window._searchMode='business'; loadContent()"
-                            class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${!isPeopleMode
-                                ? 'bg-cyan-600 text-white shadow'
-                                : 'text-gray-400 hover:text-white'}">
-                            🏢 Businesses
-                        </button>
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex gap-2 bg-gray-900 border border-gray-800 rounded-xl p-1.5 w-fit">
+                            <button id="modePeople"
+                                onclick="window._searchMode='people'; loadContent()"
+                                class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${isPeopleMode
+                                    ? 'bg-violet-600 text-white shadow'
+                                    : 'text-gray-400 hover:text-white'}">
+                                👤 People
+                            </button>
+                            <button id="modeBiz"
+                                onclick="window._searchMode='business'; loadContent()"
+                                class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${!isPeopleMode
+                                    ? 'bg-cyan-600 text-white shadow'
+                                    : 'text-gray-400 hover:text-white'}">
+                                🏢 Businesses
+                            </button>
+                        </div>
+
+                        ${!isPeopleMode ? `
+                        <select id="searchMode" onchange="toggleSearchMode()" class="bg-gray-800 border border-gray-700 rounded-lg text-xs px-3 py-1.5 text-white outline-none focus:border-cyan-500 shadow-sm">
+                            <option value="web">Web Search (Serper)</option>
+                            <option value="maps">Maps Search (Apify)</option>
+                        </select>
+                        ` : ''}
                     </div>
 
-                    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+                    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl">
                         <h2 class="text-base font-semibold text-white mb-1">
                             ${isPeopleMode ? 'Search Google for People' : 'Search Google for Businesses'}
                         </h2>
@@ -2547,10 +2549,23 @@
                                 : 'Find business websites to enrich with Camoufox — emails &amp; Instagram scraped directly from their site.'}
                         </p>
 
-                        <!-- Query rows -->
-                        <div id="queryList" class="space-y-2 mb-4">
+                        <!-- Niche and Location -->
+                        <div class="grid grid-cols-2 gap-4 mb-5">
+                            <div>
+                                <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Niche</label>
+                                <input type="text" id="bulk-search-niche" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-cyan-500 focus:outline-none" placeholder="e.g. production house">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Location</label>
+                                <input type="text" id="bulk-search-location" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-cyan-500 focus:outline-none" placeholder="e.g. Mumbai">
+                            </div>
+                        </div>
+
+                        <!-- Single Query (hidden for Bulk, used for Quick) -->
+                        <div id="queryList" class="space-y-2 mb-4 hidden">
+                            <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Search Queries</label>
                             <div class="flex gap-2">
-                                <input type="text"
+                                <input type="text" id="single-search-query"
                                     class="search-query-input flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:outline-none"
                                     placeholder="${isPeopleMode ? 'e.g. programmer film festival site:linkedin.com' : 'e.g. SEO agency Chicago'}">
                             </div>
@@ -2565,22 +2580,25 @@
                                 <option value="100" ${isPeopleMode ? 'selected' : ''}>100 results (Standard)</option>
                                 <option value="200">200 results</option>
                                 <option value="500">500 results (Deep)</option>
+                                <option value="1000">1,000 results (Bulk)</option>
+                                <option value="2000">2,000 results (Maximum)</option>
+                                <option value="5000">5,000 results (Maximum)</option>
+                                <option value="10000">10,000 results (Unlimited)</option>
                             </select>
                         </div>
 
                         <!-- Actions -->
                         <div class="flex gap-3">
-                            <button onclick="addQueryRow()" class="flex items-center gap-1.5 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-white transition-colors">
+                            <button onclick="addQueryRow()" id="addQueryBtn" class="flex items-center gap-1.5 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-white transition-colors">
                                 <i data-lucide="plus" class="w-4 h-4"></i> Add Query
                             </button>
-                            <button onclick="${isPeopleMode ? 'runPeopleSearch()' : 'runBusinessSearch()'}"
-                                class="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all duration-200 ${isPeopleMode
-                                    ? 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500'
-                                    : 'bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500'}">
-                                <i data-lucide="search" class="w-4 h-4"></i>
-                                ${isPeopleMode ? 'Find People' : 'Find Businesses'}
+                            <button onclick="runBulkSearch()" id="bulkSearchBtn"
+                                class="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 transition-all duration-200 ${isPeopleMode ? 'hidden' : ''}">
+                                <i data-lucide="rocket" class="w-4 h-4"></i>
+                                Bulk Search (20+ Queries)
                             </button>
                         </div>
+                        <div id="searchStatus" class="mt-4 hidden"></div>
                     </div>
 
                     <!-- History hint -->
@@ -2590,6 +2608,101 @@
                     </p>
                 </div>
             `;
+            lucide.createIcons();
+        }
+
+        async function runSearch() {
+            const mode = document.getElementById('searchMode')?.value || 'web';
+            const isPeople = (window._searchMode || 'people') === 'people';
+            
+            if (isPeople) return runPeopleSearch();
+            if (mode === 'maps') return runMapsSearch();
+            return runBusinessSearch();
+        }
+
+        async function runMapsSearch() {
+            const queries = _getSearchQueries();
+            const location = document.getElementById('searchLocation')?.value || '';
+            const limit = parseInt(document.getElementById('numResults').value, 10);
+            const btn = document.getElementById('searchBtn');
+            const status = document.getElementById('searchStatus');
+
+            if (!queries.length) return alert('Enter at least one query');
+            if (!location) return alert('Enter a target location (e.g. Mumbai)');
+
+            btn.disabled = true;
+            status.classList.remove('hidden');
+            status.innerHTML = `<div class="bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs rounded-lg p-3 flex items-center gap-3">
+                <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                Searching Google Maps via Apify... This takes 1-2 minutes.
+            </div>`;
+            lucide.createIcons();
+
+            try {
+                const res = await apiFetch('/api/contacts/apify-search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: queries[0],
+                        location,
+                        num_results: limit,
+                        project_id: currentProjectId
+                    })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                status.innerHTML = `<div class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-lg p-3">
+                    ✅ Success! Found ${data.total_results} results. Added ${data.inserted} new businesses.
+                </div>`;
+            } catch (e) {
+                status.innerHTML = `<div class="bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-lg p-3">❌ Error: ${e.message}</div>`;
+            }
+            btn.disabled = false;
+            lucide.createIcons();
+        }
+
+        async function runBulkSearch() {
+            const niche = document.getElementById('bulk-search-niche')?.value || '';
+            const location = document.getElementById('bulk-search-location')?.value || '';
+            const resultsPerQuery = document.getElementById('numResults')?.value || '100';
+            const btn = document.getElementById('bulkSearchBtn');
+            const status = document.getElementById('searchStatus');
+
+            if (!niche) return alert('Enter the business niche in the first query box (e.g. production house)');
+            if (!location) return alert('Enter a target location (e.g. Mumbai)');
+
+            if (!confirm(`This will generate 20+ query variants for "${niche}" in "${location}" and fetch up to 2,000 results. This takes 5-10 minutes. Continue?`)) return;
+
+            btn.disabled = true;
+            status.classList.remove('hidden');
+            status.innerHTML = `<div class="bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs rounded-lg p-3 flex items-center gap-3">
+                <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                Bulk search started! Generating queries and results... You can check the Contacts tab for progress.
+            </div>`;
+            lucide.createIcons();
+
+            try {
+                const res = await apiFetch('/api/contacts/bulk-search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        niche,
+                        location,
+                        project_id: currentProjectId,
+                        pages: 10
+                    })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                status.innerHTML = `<div class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-lg p-3">
+                    🚀 ${data.message}
+                </div>`;
+            } catch (e) {
+                status.innerHTML = `<div class="bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-lg p-3">❌ Error: ${e.message}</div>`;
+            }
+            btn.disabled = false;
             lucide.createIcons();
         }
 

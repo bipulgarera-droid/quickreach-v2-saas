@@ -36,7 +36,7 @@ DELAY_MIN = int(os.getenv('DELAY_MIN_SECONDS', 45))
 DELAY_MAX = int(os.getenv('DELAY_MAX_SECONDS', 90))
 
 
-def send_pending_emails(limit: int = 300, dry_run: bool = False, project_id: str = None, contact_ids: list[str] = None) -> dict:
+def send_pending_emails(limit: int = 600, dry_run: bool = False, project_id: str = None, contact_ids: list[str] = None, skip_reply_check: bool = False) -> dict:
     """Send all pending emails where scheduled_at <= now(). Filters by project_id and/or contact_ids if provided."""
     
     # Init Supabase
@@ -51,13 +51,16 @@ def send_pending_emails(limit: int = 300, dry_run: bool = False, project_id: str
     supabase = create_client(supabase_url, supabase_key)
     
     # ── AUTO-CHECK REPLIES/BOUNCES ──────────────────────────────────
-    # Ensure statuses are fresh before we start sending
-    try:
-        from execution.check_replies import check_all_replies
-        logger.info("Checking for replies and bounces before sending...")
-        check_all_replies(days=7)
-    except Exception as e:
-        logger.warning(f"Pre-send reply check failed (skipping): {e}")
+    # Ensure statuses are fresh before we start sending (unless skipped)
+    if not skip_reply_check:
+        try:
+            from execution.check_replies import check_all_replies
+            logger.info("Checking for replies and bounces before sending...")
+            check_all_replies(days=7)
+        except Exception as e:
+            logger.warning(f"Pre-send reply check failed (skipping): {e}")
+    else:
+        logger.info("Skipping redundant reply check (already performed by daily_run).")
     # ────────────────────────────────────────────────────────────────
 
     # Init SMTP Pool
@@ -129,12 +132,23 @@ def send_pending_emails(limit: int = 300, dry_run: bool = False, project_id: str
             limit_total = pool.get_total_limit()
             logger.info(f"{'[DRY RUN] ' if dry_run else ''}[{usage}/{limit_total}] Sending step {seq['step_number']} to {to_email} from {account.email}")
             
+            # --- Dynamic Sender Identity ---
+            # Templates usually hardcode "Bipul" at the end. We dynamically swap it if Pranav is sending.
+            is_pranav = "pranavarora" in account.email.lower()
+            sender_name = "Pranav" if is_pranav else "Bipul"
+            
+            final_body = seq['body']
+            if is_pranav:
+                final_body = final_body.replace("Bipul", "Pranav").replace("bipul", "pranav")
+            # -------------------------------
+            
             # Send Email
             res = pool.send_email(
                 account=account,
                 to_addr=to_email,
                 subject=seq['subject'],
-                body_html=seq['body'],
+                body_html=final_body,
+                sender_name=sender_name,
                 dry_run=dry_run
             )
             
@@ -221,7 +235,7 @@ def send_pending_emails(limit: int = 300, dry_run: bool = False, project_id: str
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Send pending drip campaign emails using multi-account SMTP')
-    parser.add_argument('--limit', type=int, default=50, help='Max emails to send')
+    parser.add_argument('--limit', type=int, default=600, help='Max emails to send')
     parser.add_argument('--dry-run', action='store_true', help='Preview without sending')
     parser.add_argument('--project-id', type=str, help='Restrict sending to a specific project ID')
     

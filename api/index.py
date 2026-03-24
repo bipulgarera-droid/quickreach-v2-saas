@@ -10,7 +10,7 @@ import json
 import logging
 from datetime import datetime, timedelta
 from flask import Flask, jsonify, request, render_template, redirect, send_file
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 from dotenv import load_dotenv
 from pathlib import Path
 import requests
@@ -424,31 +424,89 @@ def trigger_search():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/contacts/business-search', methods=['POST'])
-def trigger_business_search():
-    """Find businesses via Serper and store with website in enrichment_data (for Camoufox)."""
+@app.route('/api/contacts/apify-search', methods=['POST'])
+def trigger_apify_search():
+    """Find businesses via Apify Google Maps Scraper."""
     try:
         data = request.json or {}
         project_id = data.get('project_id')
-        queries = data.get('queries', [])
+        query = data.get('query')
+        location = data.get('location')
         num_results = data.get('num_results', 50)
 
-        if not queries or not project_id:
-            return jsonify({'error': 'queries and project_id are required'}), 400
+        if not query or not location or not project_id:
+            return jsonify({'error': 'query, location, and project_id are required'}), 400
+
+        from execution.apify_search import run_apify_maps_search
+        
+        # Run search
+        stats = run_apify_maps_search(query, location, num_results, project_id)
+        
+        if stats is None:
+            return jsonify({'error': 'Apify search failed'}), 500
+            
+        return jsonify({
+            'total_results': stats.get('inserted', 0) + stats.get('skipped', 0),
+            'inserted': stats.get('inserted', 0),
+            'skipped': stats.get('skipped', 0),
+            'errors': 0
+        })
+    except Exception as e:
+        logger.error(f"Apify search error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/contacts/bulk-search', methods=['POST'])
+@cross_origin()
+def run_bulk_search_api():
+    try:
+        data = request.json or {}
+        niche = data.get('niche')
+        location = data.get('location')
+        project_id = data.get('project_id')
+        pages = data.get('pages', 10)
+
+        if not niche or not location:
+            return jsonify({'error': 'Niche and location are required'}), 400
+
+        from execution.bulk_business_search import run_bulk_search
+        
+        # We run this synchronously for now because it's a "bulk" operation
+        # but the user requested progress updates. 
+        # Actually, let's run it in a thread and they can check back in contacts.
+        def _run():
+            try:
+                run_bulk_search(niche, location, project_id=project_id, pages_per_query=pages)
+            except Exception as e:
+                logger.error(f"Bulk search thread error: {e}")
 
         import threading
-        from execution.serper_search import run_search_pipeline
-        from execution.business_search import extract_and_store_businesses
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+
+        return jsonify({'message': f'Bulk search started for {niche} in {location}. Results will appear in Contacts soon.'})
+    except Exception as e:
+        logger.error(f"Bulk search error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/contacts/search', methods=['POST'])
+@cross_origin()
+def run_biz_search():
+    try:
+        data = request.json or {}
+        queries = data.get('queries', [])
+        num_results = data.get('num_results', 100)
+        project_id = data.get('project_id')
+
+        if not queries:
+            return jsonify({'error': 'No queries provided'}), 400
 
         def _run():
-            logger.info(f"[BizSearch] Starting for {len(queries)} queries, project={project_id}")
-            results = run_search_pipeline(queries, num_results, project_id=project_id)
-            total_stats = {'inserted': 0, 'skipped': 0, 'errors': 0}
-            for query in queries:
-                stats = extract_and_store_businesses(results, source_query=query, project_id=project_id)
-                for k in total_stats:
-                    total_stats[k] += stats.get(k, 0)
-            logger.info(f"[BizSearch] Done — {total_stats}")
+            try:
+                from execution.business_search import run_business_search
+                total_stats = run_business_search(queries, num_results=num_results, project_id=project_id)
+                logger.info(f"[BizSearch] Done — {total_stats}")
+            except Exception as e:
+                logger.error(f"Async business search error: {e}")
 
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
@@ -1507,7 +1565,7 @@ def trigger_send():
     """Send pending scheduled emails."""
     try:
         data = request.json or {}
-        limit = data.get('limit', 300)
+        limit = data.get('limit', 600)
         dry_run = data.get('dry_run', False)
         project_id = data.get('project_id')
         contact_ids = data.get('contact_ids') # For "Send Selected"
@@ -1550,7 +1608,7 @@ def trigger_daily_run():
     """Trigger the full daily workflow: check replies + send pending emails."""
     try:
         data = request.json or {}
-        limit = data.get('limit', 300)
+        limit = data.get('limit', 600)
         dry_run = data.get('dry_run', False)
         project_id = data.get('project_id')
 

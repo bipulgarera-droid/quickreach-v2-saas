@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
-MAX_PER_DAY = int(os.getenv("MAX_PER_ACCOUNT_PER_DAY", 60))
+MAX_PER_DAY = int(os.getenv("MAX_PER_ACCOUNT_PER_DAY", 30))
 MAX_PER_HOUR = int(os.getenv("MAX_PER_ACCOUNT_PER_HOUR", 20))
 
 def get_today_str() -> str:
@@ -219,7 +219,7 @@ class SMTPPool:
             checked += 1
         return None  # all accounts exhausted
 
-    def send_email(self, account: GmailAccount, to_addr: str, subject: str, body_html: str, dry_run: bool = False, delay_min: Optional[int] = None, delay_max: Optional[int] = None) -> dict:
+    def send_email(self, account: GmailAccount, to_addr: str, subject: str, body_html: str, dry_run: bool = False, delay_min: Optional[int] = None, delay_max: Optional[int] = None, sender_name: Optional[str] = None) -> dict:
         """Send an HTML email via SMTP from the given account.
         
         Enforces a global inter-send delay shared across all concurrent threads,
@@ -251,7 +251,7 @@ class SMTPPool:
 
             try:
                 msg = MIMEMultipart("alternative")
-                msg["From"] = account.email
+                msg["From"] = f"{sender_name} <{account.email}>" if sender_name else account.email
                 msg["To"] = to_addr
                 msg["Subject"] = subject
 
