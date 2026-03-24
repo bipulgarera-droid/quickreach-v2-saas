@@ -269,7 +269,17 @@ def daily_snapshot():
             raw_phone = enrichment.get('phone') or enrichment.get('phone_number')
             clean_phone = ''.join(filter(str.isdigit, str(raw_phone))) if raw_phone else None
             ig_handle = contact.get('instagram') or enrichment.get('instagram') or enrichment.get('instagram_handle')
-            clean_ig = str(ig_handle).replace('@', '').strip() if ig_handle else None
+            if ig_handle:
+                ig_str = str(ig_handle).strip().rstrip('/')
+                # Strip full URL down to just the handle
+                for prefix in ['https://www.instagram.com/', 'http://www.instagram.com/', 'https://instagram.com/', 'http://instagram.com/', 'www.instagram.com/', 'instagram.com/']:
+                    if ig_str.lower().startswith(prefix):
+                        ig_str = ig_str[len(prefix):]
+                        break
+                # Also strip /p/XXXX post links — extract nothing useful
+                clean_ig = ig_str.replace('@', '').strip().rstrip('/') if ig_str and not ig_str.startswith('p/') else None
+            else:
+                clean_ig = None
             
             scheduled = step.get('scheduled_at', '')
             is_overdue = bool(scheduled) and scheduled < today_str
