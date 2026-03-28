@@ -900,6 +900,10 @@ def trigger_manual_verification():
                     else:
                         to_verify.append(c)
 
+                def verify_one(c):
+                    email = c['email']
+                    enrichment_data = c.get('enrichment_data') or {}
+                    
                     logger.info(f"Manual Verification: Checking {email} for contact {c['id']}")
                     v_status, v_reason = check_email(email)
                     enrichment_data['verification_status'] = v_status
