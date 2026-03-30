@@ -258,40 +258,47 @@ def dashboard_stats():
     try:
         project_id = request.args.get('project_id')
         if not project_id: return jsonify({'error': 'project_id required'}), 400
-        # Total contacts
-        contacts = supabase.table('contacts').select('id, status', count='exact').eq('project_id', project_id).execute()
-        total = contacts.count or 0
-        
-        # Count by status
-        status_counts = {}
-        for contact in (contacts.data or []):
-            s = contact.get('status', 'new')
-            status_counts[s] = status_counts.get(s, 0) + 1
-        
-        # Email stats
-        emails = supabase.table('email_sequences').select('id, status', count='exact').eq('project_id', project_id).execute()
-        email_counts = {}
-        for seq in (emails.data or []):
-            s = seq.get('status', 'pending')
-            email_counts[s] = email_counts.get(s, 0) + 1
-        
+
+        # Helper: count rows matching a status using server-side COUNT (avoids 1k row limit)
+        def ccount(table, status=None):
+            q = supabase.table(table).select('id', count='exact').eq('project_id', project_id)
+            if status:
+                q = q.eq('status', status)
+            return q.execute().count or 0
+
+        # Contact counts
+        total     = ccount('contacts')
+        c_new     = ccount('contacts', 'new')
+        enriched  = ccount('contacts', 'enriched')
+        icebr     = ccount('contacts', 'icebreaker_ready')
+        in_seq    = ccount('contacts', 'in_sequence')
+        replied_c = ccount('contacts', 'replied')
+        completed = ccount('contacts', 'completed')
+        bounced_c = ccount('contacts', 'bounced')
+
+        # Email sequence counts
+        total_seq = ccount('email_sequences')
+        pending   = ccount('email_sequences', 'pending')
+        sent      = ccount('email_sequences', 'sent')
+        opened    = ccount('email_sequences', 'opened')
+
         return jsonify({
             'contacts': {
                 'total': total,
-                'new': status_counts.get('new', 0),
-                'enriched': status_counts.get('enriched', 0),
-                'icebreaker_ready': status_counts.get('icebreaker_ready', 0),
-                'in_sequence': status_counts.get('in_sequence', 0),
-                'replied': status_counts.get('replied', 0),
-                'completed': status_counts.get('completed', 0),
+                'new': c_new,
+                'enriched': enriched,
+                'icebreaker_ready': icebr,
+                'in_sequence': in_seq,
+                'replied': replied_c,
+                'completed': completed,
             },
             'emails': {
-                'total': emails.count or 0,
-                'pending': email_counts.get('pending', 0),
-                'sent': email_counts.get('sent', 0),
-                'opened': email_counts.get('opened', 0),
-                'replied': status_counts.get('replied', 0),  # Use contact-based source of truth
-                'bounced': status_counts.get('bounced', 0), # Use contact-based source of truth
+                'total': total_seq,
+                'pending': pending,
+                'sent': sent,
+                'opened': opened,
+                'replied': replied_c,   # contact-based source of truth
+                'bounced': bounced_c,   # contact-based source of truth
             }
         })
     except Exception as e:
