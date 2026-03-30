@@ -64,26 +64,31 @@ def check_all_replies(days=7, logger_callback=None):
     supabase = create_client(url, key)
     
     # 1. Build Comprehensive Domain Map
-    print("Building Domain Map for Zero-Miss Detection...")
-    res = supabase.table('contacts').select('id, email, company, enrichment_data').execute()
+    msg = "Building Domain Map and Project ID Map..."
+    print(msg)
+    if logger_callback: logger_callback(msg)
+    
+    res = supabase.table('contacts').select('id, email, company, enrichment_data, project_id').execute()
     contacts = res.data or []
     prospect_emails = set()
-    domain_map = {} # domain -> contact_id
+    domain_map = {} # domain -> (contact_id, project_id)
+    contact_project_map = {} # contact_id -> project_id
     
     for c in contacts:
         cid = c['id']
+        pid = c['project_id']
+        contact_project_map[cid] = pid
+        
         email_val = (c.get('email') or '').lower().strip()
         if email_val:
             prospect_emails.add(email_val)
-            domain_map[email_val.split('@')[-1]] = cid
+            domain_map[email_val.split('@')[-1]] = (cid, pid)
         
-        # Company Name Domain Extraction
         company = (c.get('company') or '').lower().strip()
         if company and len(company) > 3:
             comp_domain = company.replace(' ', '').replace('.com', '') + '.com'
-            domain_map[comp_domain] = cid
+            domain_map[comp_domain] = (cid, pid)
             
-        # Enrichment Data Website Extraction
         enrich = c.get('enrichment_data') or {}
         if isinstance(enrich, str):
             try: enrich = json.loads(enrich)
@@ -93,9 +98,11 @@ def check_all_replies(days=7, logger_callback=None):
         if website and 'google.com/maps' not in website and 'google.com/search' not in website:
             w_domain = website.replace('https://', '').replace('http://', '').replace('www.', '').split('/')[0]
             if len(w_domain) > 3:
-                domain_map[w_domain] = cid
+                domain_map[w_domain] = (cid, pid)
 
-    print(f"Loaded {len(prospect_emails)} emails and {len(domain_map)} unique domains.")
+    msg = f"Loaded {len(prospect_emails)} emails and {len(domain_map)} unique domains."
+    print(msg)
+    if logger_callback: logger_callback(msg)
 
     # 2. Get Gmail Accounts
     accounts = []
@@ -150,6 +157,8 @@ def check_all_replies(days=7, logger_callback=None):
                     
                     # 2. Identify Contact
                     contact_id = None
+                    project_id = None
+                    
                     if is_b:
                         # Deep bounce detection
                         _, full_data = mail.fetch(msg_id, "(RFC822)")
@@ -164,9 +173,10 @@ def check_all_replies(days=7, logger_callback=None):
                         
                         for p_email in prospect_emails:
                             if p_email in body.lower():
-                                matches = [c['id'] for c in contacts if (c.get('email') or '').lower() == p_email]
-                                contact_id = matches[0] if matches else None
-                                if contact_id:
+                                matches = [c for c in contacts if (c.get('email') or '').lower() == p_email]
+                                if matches:
+                                    contact_id = matches[0]['id']
+                                    project_id = matches[0]['project_id']
                                     msg = f"  [BOUNCE] Found recipient: {p_email}"
                                     print(msg)
                                     if logger_callback: logger_callback(msg)
@@ -174,12 +184,16 @@ def check_all_replies(days=7, logger_callback=None):
                     else:
                         # Normal Reply detection
                         if sender in prospect_emails:
-                            matches = [c['id'] for c in contacts if (c.get('email') or '').lower() == sender]
-                            contact_id = matches[0] if matches else None
+                            matches = [c for c in contacts if (c.get('email') or '').lower() == sender]
+                            if matches:
+                                contact_id = matches[0]['id']
+                                project_id = matches[0]['project_id']
                         else:
                             domain = sender.split('@')[-1]
                             if domain not in ['google.com', 'gmail.com', 'outlook.com', 'yahoo.com']:
-                                contact_id = domain_map.get(domain)
+                                match = domain_map.get(domain)
+                                if match:
+                                    contact_id, project_id = match
 
                     if contact_id:
                         if not is_b:
@@ -195,12 +209,16 @@ def check_all_replies(days=7, logger_callback=None):
 
                         if is_b:
                             supabase.table('contacts').update({'status': 'bounced'}).eq('id', contact_id).execute()
+                            # Optional: Update sequence status too if needed
                         else:
                             msg = f"  [REPLY] {sender}"
                             print(msg)
                             if logger_callback: logger_callback(msg)
+                            
+                            # Insert into replies table with project_id
                             supabase.table('replies').insert({
                                 'contact_id': contact_id,
+                                'project_id': project_id,
                                 'sender_email': sender,
                                 'recipient_email': acct_email,
                                 'subject': subject_hdr,
@@ -208,6 +226,8 @@ def check_all_replies(days=7, logger_callback=None):
                                 'message_id': full_msg.get('Message-ID', ''),
                                 'thread_id': full_msg.get('Thread-ID', '')
                             }).execute()
+                            
+                            # Update contact status
                             supabase.table('contacts').update({'status': 'replied'}).eq('id', contact_id).execute()
                             
                 except Exception as e:
