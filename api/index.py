@@ -861,6 +861,7 @@ def trigger_manual_verification():
     try:
         data = request.json or {}
         contact_ids = data.get('contact_ids', [])
+        force = data.get('force', False)
         if not contact_ids:
             return jsonify({'error': 'No contact IDs provided'}), 400
 
@@ -911,7 +912,7 @@ def trigger_manual_verification():
                     if not c.get('email'):
                         job['done'] += 1
                         job['skipped'] += 1
-                    elif v_status:
+                    elif False: # v_status and not force: (DISABLED FOR NOW AS REQUESTED)
                         # Skip if it already has ANY verification status (valid, invalid, risky, etc.)
                         job['done'] += 1
                         job['skipped'] += 1
