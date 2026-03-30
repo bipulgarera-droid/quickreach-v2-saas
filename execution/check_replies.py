@@ -74,6 +74,13 @@ def check_all_replies(days=7, logger_callback=None):
     domain_map = {} # domain -> (contact_id, project_id)
     contact_project_map = {} # contact_id -> project_id
     
+    # Blacklisted domains that should never be mapped to a contact via domain-matching
+    BLACKLIST_DOMAINS = {
+        'google.com', 'gmail.com', 'outlook.com', 'yahoo.com', 'icloud.com', 'me.com', 
+        'linkedin.com', 'facebook.com', 'instagram.com', 'twitter.com', 'x.com', 'youtube.com',
+        'googlealerts-noreply@google.com', 'no-reply@linkedin.com'
+    }
+
     for c in contacts:
         cid = c['id']
         pid = c['project_id']
@@ -82,12 +89,15 @@ def check_all_replies(days=7, logger_callback=None):
         email_val = (c.get('email') or '').lower().strip()
         if email_val:
             prospect_emails.add(email_val)
-            domain_map[email_val.split('@')[-1]] = (cid, pid)
+            e_domain = email_val.split('@')[-1]
+            if e_domain not in BLACKLIST_DOMAINS:
+                domain_map[e_domain] = (cid, pid)
         
         company = (c.get('company') or '').lower().strip()
         if company and len(company) > 3:
             comp_domain = company.replace(' ', '').replace('.com', '') + '.com'
-            domain_map[comp_domain] = (cid, pid)
+            if comp_domain not in BLACKLIST_DOMAINS:
+                domain_map[comp_domain] = (cid, pid)
             
         enrich = c.get('enrichment_data') or {}
         if isinstance(enrich, str):
@@ -95,9 +105,11 @@ def check_all_replies(days=7, logger_callback=None):
             except: enrich = {}
         
         website = (enrich.get('website') or enrich.get('company_domain', '') or '').lower().strip()
-        if website and 'google.com/maps' not in website and 'google.com/search' not in website:
+        if website:
+            if any(x in website for x in ['google.com/maps', 'google.com/search', 'linkedin.com', 'facebook.com']):
+                continue
             w_domain = website.replace('https://', '').replace('http://', '').replace('www.', '').split('/')[0]
-            if len(w_domain) > 3:
+            if len(w_domain) > 3 and w_domain not in BLACKLIST_DOMAINS:
                 domain_map[w_domain] = (cid, pid)
 
     msg = f"Loaded {len(prospect_emails)} emails and {len(domain_map)} unique domains."
@@ -142,8 +154,8 @@ def check_all_replies(days=7, logger_callback=None):
             
             for msg_id in reversed(ids):
                 try:
-                    _, header_data = mail.fetch(msg_id, "(BODY[HEADER.FIELDS (FROM SUBJECT)])")
-                    if not header_data or not header_data[0]: continue
+                    res_status, header_data = mail.fetch(msg_id, "(BODY[HEADER.FIELDS (FROM SUBJECT)])")
+                    if res_status != 'OK' or not header_data or not header_data[0]: continue
                     msg_obj = email.message_from_bytes(header_data[0][1])
                     
                     from_hdr = _decode_header_value(msg_obj.get("From", ""))
@@ -158,29 +170,33 @@ def check_all_replies(days=7, logger_callback=None):
                     # 2. Identify Contact
                     contact_id = None
                     project_id = None
+                    full_msg = None
                     
                     if is_b:
                         # Deep bounce detection
-                        _, full_data = mail.fetch(msg_id, "(RFC822)")
-                        full_msg = email.message_from_bytes(full_data[0][1])
-                        body = ""
-                        if full_msg.is_multipart():
-                            for part in full_msg.walk():
-                                if part.get_content_type() == "text/plain":
-                                    body += part.get_payload(decode=True).decode(errors='replace')
-                        else:
-                            body = full_msg.get_payload(decode=True).decode(errors='replace')
-                        
-                        for p_email in prospect_emails:
-                            if p_email in body.lower():
-                                matches = [c for c in contacts if (c.get('email') or '').lower() == p_email]
-                                if matches:
-                                    contact_id = matches[0]['id']
-                                    project_id = matches[0]['project_id']
-                                    msg = f"  [BOUNCE] Found recipient: {p_email}"
-                                    print(msg)
-                                    if logger_callback: logger_callback(msg)
-                                    break
+                        res_status, full_data = mail.fetch(msg_id, "(RFC822)")
+                        if res_status == 'OK' and full_data and full_data[0]:
+                            full_msg = email.message_from_bytes(full_data[0][1])
+                            body = ""
+                            if full_msg.is_multipart():
+                                for part in full_msg.walk():
+                                    if part.get_content_type() == "text/plain":
+                                        payload = part.get_payload(decode=True)
+                                        if payload: body += payload.decode(errors='replace')
+                            else:
+                                payload = full_msg.get_payload(decode=True)
+                                if payload: body = payload.decode(errors='replace')
+                            
+                            for p_email in prospect_emails:
+                                if p_email in body.lower():
+                                    matches = [c for c in contacts if (c.get('email') or '').lower() == p_email]
+                                    if matches:
+                                        contact_id = matches[0]['id']
+                                        project_id = matches[0]['project_id']
+                                        msg = f"  [BOUNCE] Found recipient: {p_email}"
+                                        print(msg)
+                                        if logger_callback: logger_callback(msg)
+                                        break
                     else:
                         # Normal Reply detection
                         if sender in prospect_emails:
@@ -190,27 +206,29 @@ def check_all_replies(days=7, logger_callback=None):
                                 project_id = matches[0]['project_id']
                         else:
                             domain = sender.split('@')[-1]
-                            if domain not in ['google.com', 'gmail.com', 'outlook.com', 'yahoo.com']:
+                            if domain not in BLACKLIST_DOMAINS:
                                 match = domain_map.get(domain)
                                 if match:
                                     contact_id, project_id = match
 
                     if contact_id:
                         if not is_b:
-                            _, full_data = mail.fetch(msg_id, "(RFC822)")
-                            full_msg = email.message_from_bytes(full_data[0][1])
-                            body = ""
-                            if full_msg.is_multipart():
-                                for part in full_msg.walk():
-                                    if part.get_content_type() == "text/plain":
-                                        body += part.get_payload(decode=True).decode(errors='replace')
-                            else:
-                                body = full_msg.get_payload(decode=True).decode(errors='replace')
+                            res_status, full_data = mail.fetch(msg_id, "(RFC822)")
+                            if res_status == 'OK' and full_data and full_data[0]:
+                                full_msg = email.message_from_bytes(full_data[0][1])
+                                body = ""
+                                if full_msg.is_multipart():
+                                    for part in full_msg.walk():
+                                        if part.get_content_type() == "text/plain":
+                                            payload = part.get_payload(decode=True)
+                                            if payload: body += payload.decode(errors='replace')
+                                else:
+                                    payload = full_msg.get_payload(decode=True)
+                                    if payload: body = payload.decode(errors='replace')
 
                         if is_b:
                             supabase.table('contacts').update({'status': 'bounced'}).eq('id', contact_id).execute()
-                            # Optional: Update sequence status too if needed
-                        else:
+                        elif full_msg:
                             msg = f"  [REPLY] {sender}"
                             print(msg)
                             if logger_callback: logger_callback(msg)
