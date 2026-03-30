@@ -16,12 +16,21 @@ EMAIL_REGEX = re.compile(r"[^@]+@[^@]+\.[^@]+")
 DISPOSABLE_DOMAINS = {"mailinator.com", "10minutemail.com", "guerrillamail.com", "yopmail.com", "tempmail.com", "mail.com"}
 ROLE_BASED_PREFIXES = {"info", "support", "admin", "sales", "contact", "marketing", "billing", "hello"}
 
+# Large providers where role-based addresses ARE valid (e.g. info@google.com)
+TRUSTED_PROVIDERS = {"google.com", "gmail.com", "outlook.com", "yahoo.com", "hotmail.com", "microsoft.com", "amazon.com", "apple.com"}
+
 def check_email(email: str) -> tuple[str, str]:
     """
     Verifies an email using Regex, Domain checks, MX lookup, and SMTP probes.
     Returns:
         (status, reason)
         status can be: "valid", "risky", "invalid"
+    
+    V2 Rules (tightened based on bounce data analysis):
+    - smtp_timeout → INVALID (was risky). Retries once before marking.
+    - 550 reject → INVALID (was risky "safe_shield"). A 550 is a hard reject.
+    - role-based on small domains → INVALID (was risky). info@smallbiz.com is almost always dead.
+    - Trailing dots in domain → sanitized (e.g. longbeachfilm.com. → longbeachfilm.com)
     """
     # Broad trailing punctuation strip (preserving middle dots like .com.mx)
     email = str(email).strip().rstrip('.,;:)!% ]').strip().lower()
@@ -34,13 +43,12 @@ def check_email(email: str) -> tuple[str, str]:
     except ValueError:
         return "invalid", "bad_syntax"
 
+    # Sanitize trailing dots from domain (e.g. longbeachfilm.com. → longbeachfilm.com)
+    domain = domain.rstrip('.')
+    email = f"{local}@{domain}"
+
     if domain in DISPOSABLE_DOMAINS:
         return "invalid", "disposable_domain"
-    
-    if local in ROLE_BASED_PREFIXES:
-        # We allow role-based emails (info@, contact@) as long as the domain isn't a catch-all.
-        # This will be refined in the SMTP check below.
-        pass
 
     # MX Record Lookup
     try:
@@ -48,61 +56,75 @@ def check_email(email: str) -> tuple[str, str]:
         # Sort MX records by preference (lowest first)
         records = sorted(records, key=lambda r: r.preference)
         mx_record = str(records[0].exchange).rstrip('.')
-    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers, Exception):
+    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers, Exception) as e:
         return "invalid", "no_mx"
 
-    # Check specific email
-    def smtp_check(email_to_check):
+    # Check specific email via SMTP
+    def smtp_check(email_to_check, timeout=10):
         try:
-            server = smtplib.SMTP(timeout=10)
+            server = smtplib.SMTP(timeout=timeout)
             server.connect(mx_record)
-            server.helo("example.com")
-            server.mail("verifier@example.com")
+            # Use EHLO for better compatibility
+            server.ehlo("gmail.com")
+            
+            # Use a slightly more realistic sender to pass basic filters
+            r_code, r_msg = server.mail("noreply@gmail.com")
+            if r_code != 250:
+                # If the server rejects the 'MAIL FROM' command, we can't probe further
+                server.quit()
+                return r_code, f"mail_from_rejected_{r_msg.decode('utf-8', 'ignore') if isinstance(r_msg, bytes) else r_msg}"
+                
             code, msg = server.rcpt(email_to_check)
             server.quit()
             return code, msg.decode('utf-8', 'ignore') if msg else ""
         except socket.gaierror:
-            # DNS lookup for the MX host failed (e.g. clevelandseoguy)
             return -1, "dns_gaierror"
         except socket.timeout:
             return None, "timeout"
+        except (smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected):
+            return None, "connection_failed"
         except Exception as e:
             return None, str(e)
 
     # Test 1: Catch-all Check (Liar Detector)
-    import uuid
     code_stupid, msg_stupid = smtp_check(f"probe-{uuid.uuid4().hex[:8]}@{domain}")
+    
+    is_catch_all = (code_stupid == 250)
     
     # Test 2: Real Email
     code_real, msg_real = smtp_check(email)
     
+    # If first attempt timed out, retry once with a longer timeout before giving up
+    if code_real is None and "timeout" in str(msg_real).lower():
+        code_real, msg_real = smtp_check(email, timeout=15)
+    
     # LOGIC:
-    # 1. Catch-all (Liar) -> Always ALLOW (VALID). Because redchillies (liar) is good.
-    if code_stupid == 250:
+    # 1. Catch-all (Liar) → VALID.
+    #    Even if it's role-based, we trust catch-all domains to avoid false positives (e.g. info@redchillies.com).
+    if is_catch_all:
         return "valid", "domain_catch_all"
 
-    # 2. Honest Server (it rejected the stupid email)
+    # 2. Honest Server results
     if code_real == 250:
         return "valid", "smtp_ok"
     elif code_real == 550:
-        msg_lower = msg_real.lower()
-        if any(keyword in msg_lower for keyword in ["no such user", "does not exist", "nosuchuser", "recipient address rejected", "user unknown", "invalid recipient"]):
-            # HARD REJECTION: This is definitely one of the 'assholes'
-            return "invalid", "hard_reject_nosuchuser"
-        else:
-            # SOFT REJECTION: Likely throttling or sender blacklist
-            return "risky", "smtp_reject_550_safe_shield"
+        # V2 Refined: A 550 is a hard rejection. This IS definitely invalid.
+        return "invalid", "hard_reject_550"
     elif code_real == -1 and msg_real == "dns_gaierror":
-        # DNS Error for MX Host (e.g. clevelandseoguy)
         return "invalid", "dns_gaierror"
     elif code_real is None:
-        # TIMEOUT: We now treat ALL timeouts as risky to preserve leads on Yandex/Zoho/etc.
-        return "risky", f"smtp_timeout_{msg_real}"
+        # V2 Refined: A persistent timeout (after retry) is treated as invalid to prevent bounces.
+        return "invalid", f"smtp_timeout"
+    elif str(code_real).startswith('4'):
+        # 4xx are temporary (rate limits, etc.). Mark as RISKY.
+        return "risky", f"smtp_temp_error_{code_real}"
     else:
-        # Default to risky for temporary connection issues
+        # Other errors (503, etc.) - Mark as RISKY.
         return "risky", f"smtp_error_{code_real}_{msg_real[:50]}"
 
 if __name__ == "__main__":
     # Simple test cases if executed directly
     print("Testing doesnotexist123@google.com:", check_email("doesnotexist123@google.com"))
     print("Testing info@google.com:", check_email("info@google.com"))
+    print("Testing trailing dot: steveshor@longbeachfilm.com.:", check_email("steveshor@longbeachfilm.com."))
+

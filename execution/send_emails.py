@@ -108,7 +108,7 @@ def send_pending_emails(limit: int = 600, dry_run: bool = False, project_id: str
                 stats['skipped'] += 1
                 continue
             
-            # BOUNCE PROTECTION: Only send to 'valid' emails
+            # BOUNCE PROTECTION: Block invalid AND risky emails from sending
             ed = contact.get('enrichment_data') or {}
             if isinstance(ed, str):
                 try: ed = json.loads(ed)
@@ -116,7 +116,13 @@ def send_pending_emails(limit: int = 600, dry_run: bool = False, project_id: str
             
             v_status = ed.get('verification_status')
             if v_status == 'invalid':
-                logger.warning(f"BOUNCE PROTECTION: Skipping {to_email} (Status: INVALID). Marking as skipped.")
+                logger.warning(f"BOUNCE PROTECTION: Skipping {to_email} (Status: INVALID, Reason: {ed.get('verification_reason', '?')}). Marking as skipped.")
+                if not dry_run:
+                    supabase.table('email_sequences').update({'status': 'skipped'}).eq('id', seq['id']).execute()
+                stats['skipped'] += 1
+                continue
+            elif v_status == 'risky':
+                logger.warning(f"BOUNCE PROTECTION: Skipping {to_email} (Status: RISKY, Reason: {ed.get('verification_reason', '?')}). Marking as skipped_risky.")
                 if not dry_run:
                     supabase.table('email_sequences').update({'status': 'skipped'}).eq('id', seq['id']).execute()
                 stats['skipped'] += 1
