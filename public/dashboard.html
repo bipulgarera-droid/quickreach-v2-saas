@@ -1307,37 +1307,37 @@
                                             <input type="text" class="w-full bg-transparent text-white text-sm px-2 py-1 outline-none" value="${(c.name || '').replace(/"/g, '&quot;')}" id="name-input-${c.id}" onblur="saveContactName('${c.id}')" onkeydown="if(event.key==='Enter') saveContactName('${c.id}'); if(event.key==='Escape') cancelContactName('${c.id}')">
                                         </div>
                                     </td>
-                                    <td class="px-4 py-3 text-gray-300 max-w-[150px] truncate" title="\${(() => { try { const ed = typeof c.enrichment_data === 'string' ? JSON.parse(c.enrichment_data) : (c.enrichment_data || {}); return (c.company || ed.company || ed.linkedin_company || c.source || '').replace(/\"/g, '&quot;'); } catch (e) { return c.source || ''; } })()}">\${(() => { try { const ed = typeof c.enrichment_data === 'string' ? JSON.parse(c.enrichment_data) : (c.enrichment_data || {}); return c.company || ed.company || ed.linkedin_company || c.source || '—'; } catch (e) { return c.source || '—'; } })()}</td>
-                                    \${isReplied ? '' : \`
+                                    <td class="px-4 py-3 text-gray-300 max-w-[150px] truncate" title="${(() => { try { const ed = typeof c.enrichment_data === 'string' ? JSON.parse(c.enrichment_data) : (c.enrichment_data || {}); return (c.company || ed.company || ed.linkedin_company || c.source || '').replace(/"/g, '&quot;'); } catch (e) { return c.source || ''; } })()}">${(() => { try { const ed = typeof c.enrichment_data === 'string' ? JSON.parse(c.enrichment_data) : (c.enrichment_data || {}); return c.company || ed.company || ed.linkedin_company || c.source || '—'; } catch (e) { return c.source || '—'; } })()}</td>
+                                    ${isReplied ? '' : `
                                     <td class="px-4 py-3 text-cyan-400 font-medium">
-                                        \${(() => { 
+                                        ${(() => { 
                                             try { 
                                                 const ed = typeof c.enrichment_data === 'string' ? JSON.parse(c.enrichment_data) : (c.enrichment_data || {}); 
                                                 const w = ed.website;
                                                 if (!w) return '<span class="text-gray-600">—</span>';
                                                 const cleanW = w.startsWith('http') ? w : 'https://' + w;
-                                                return \\\`<a href="\${cleanW}" target="_blank" class="hover:underline flex items-center gap-1"><i data-lucide="external-link" class="w-3 h-3"></i> Visit</a>\\\`;
+                                                return `<a href="${cleanW}" target="_blank" class="hover:underline flex items-center gap-1"><i data-lucide="external-link" class="w-3 h-3"></i> Visit</a>`;
                                             } catch (e) { return '<span class="text-gray-600">—</span>'; } 
                                         })()}
                                     </td>
-                                    <td class="px-4 py-3 text-gray-400 text-xs">\${c.phone || '—'}</td>
-                                    \`}
+                                    <td class="px-4 py-3 text-gray-400 text-xs">${c.phone || '—'}</td>
+                                    `}
                                     <td class="px-4 py-3 text-gray-300">
                                         <div class="flex items-center gap-1.5">
                                             <span class="${c.email ? 'text-gray-300' : 'text-gray-600'}">${c.email || '—'}</span>
                                             ${c.email ? `<button onclick="copyToClipboard('${c.email}', this)" class="text-gray-500 hover:text-white transition-colors"><i data-lucide="copy" class="w-3 h-3"></i></button>` : ''}
                                         </div>
                                     </td>
-                                    \${isReplied ? (() => {
+                                    ${isReplied ? (() => {
                                         let r = null;
                                         if (c.replies && c.replies.length > 0) {
                                             r = c.replies.reduce((prev, curr) => new Date(curr.received_at) > new Date(prev.received_at) ? curr : prev);
                                         }
-                                        return \`
-                                        <td class="px-4 py-3 text-[11px] text-gray-400 font-mono">\${r && r.sender_email ? r.sender_email : '—'}</td>
-                                        <td class="px-4 py-3 text-[11px] text-gray-300 max-w-xs"><div class="line-clamp-2 italic" title="\${r && r.body ? r.body.replace(/\\"/g, '&quot;') : ''}">\${r && r.body ? r.body : '—'}</div></td>
-                                        <td class="px-4 py-3">\${r && r.sentiment ? sentimentBadge(r.sentiment) : '—'}</td>
-                                        \`;
+                                        return `
+                                        <td class="px-4 py-3 text-[11px] text-gray-400 font-mono">${r && r.sender_email ? r.sender_email : '—'}</td>
+                                        <td class="px-4 py-3 text-[11px] text-gray-300 max-w-xs"><div class="line-clamp-2 italic" title="${r && r.body ? r.body.replace(/"/g, '&quot;') : ''}">${r && r.body ? r.body : '—'}</div></td>
+                                        <td class="px-4 py-3">${r && r.sentiment ? sentimentBadge(r.sentiment) : '—'}</td>
+                                        `;
                                     })() : ''}
                                     <td class="px-4 py-3 flex items-center gap-2">
                                         <span class="status-${c.status} text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-current opacity-80">${c.status || 'new'}</span>
@@ -2589,7 +2589,7 @@
                                         <span>${timeStr}</span>
                                     </div>
                                 </div>
-                                <span class="text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-tighter shrink-0 \${statusColor}">\${j.status}</span>
+                                <span class="text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-tighter shrink-0 ${statusColor}">${j.status}</span>
                             </div>
                         </div>
                     `;
