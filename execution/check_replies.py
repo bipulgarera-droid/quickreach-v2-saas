@@ -218,6 +218,9 @@ def check_all_replies(days=7, logger_callback=None):
                                     contact_id, project_id = match
 
                     if contact_id:
+                        m_id = None
+                        t_id = None
+                        
                         if not is_b:
                             res_status, full_data = mail.fetch(msg_id, "(RFC822)")
                             if res_status == 'OK' and full_data and isinstance(full_data[0], tuple):
@@ -236,10 +239,14 @@ def check_all_replies(days=7, logger_callback=None):
                         if is_b:
                             supabase.table('contacts').update({'status': 'bounced'}).eq('id', contact_id).execute()
                             # Optional: Update email_sequences too
-                        elif full_msg:
+                        else:
                             msg = f"  [REPLY] {sender}"
                             print(msg)
                             if logger_callback: logger_callback(msg)
+                            
+                            if full_msg:
+                                m_id = full_msg.get('Message-ID', '')
+                                t_id = full_msg.get('Thread-ID', '')
                             
                             m_id = str(m_id).strip() if m_id else None
                             t_id = str(t_id).strip() if t_id else None
