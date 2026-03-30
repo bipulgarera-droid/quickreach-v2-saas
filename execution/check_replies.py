@@ -110,7 +110,20 @@ def check_all_replies(days=7, logger_callback=None):
             if len(w_domain) > 3 and w_domain not in BLACKLIST_DOMAINS:
                 domain_map[w_domain] = (cid, pid)
 
-    msg = f"Loaded {len(prospect_emails)} emails and {len(domain_map)} unique domains."
+    # 1.5 Build active subject map from email_sequences
+    subject_map = {} # base_subject -> [(contact_id, project_id)]
+    page_size = 1000
+    for i in range(0, 50000, page_size):
+        seq_page = supabase.table('email_sequences').select('contact_id, project_id, subject').range(i, i + page_size - 1).execute()
+        if not seq_page.data: break
+        for s in seq_page.data:
+            subj = (s.get('subject') or '').strip().lower()
+            if subj:
+                if subj not in subject_map:
+                    subject_map[subj] = []
+                subject_map[subj].append((s['contact_id'], s['project_id']))
+                
+    msg = f"Loaded {len(prospect_emails)} emails, {len(domain_map)} unique domains, and {len(subject_map)} campaign subjects."
     print(msg)
     if logger_callback: logger_callback(msg)
 
@@ -196,6 +209,35 @@ def check_all_replies(days=7, logger_callback=None):
 
                     # 2. Check if it's a bounce (Headers)
                     is_b = is_bounce(from_hdr, subject_hdr)
+                    
+                    # 2.5. Fallback: Subject-Based Rescue
+                    if not contact_id and not is_b:
+                        is_reply = subject_hdr.lower().startswith('re:') or subject_hdr.lower().startswith('fwd:') or subject_hdr.lower().startswith('fw:')
+                        if is_reply:
+                            import re
+                            base_subj = re.sub(r'^(re|fwd|fw):\s*', '', subject_hdr, flags=re.I).strip().lower()
+                            candidate_cids = subject_map.get(base_subj, [])
+                            
+                            if candidate_cids:
+                                domain_prefix = domain.split('.')[0].lower() if domain else ''
+                                best_cid = None
+                                best_pid = None
+                                
+                                for cid, pid in candidate_cids:
+                                    c = next((x for x in contacts if x['id'] == cid), None)
+                                    if c:
+                                        c_comp = (c.get('company') or '').lower()
+                                        c_em = (c.get('email') or '').lower()
+                                        if domain_prefix and len(domain_prefix) > 2 and (domain_prefix in c_comp or domain_prefix in c_em):
+                                            best_cid = cid
+                                            best_pid = pid
+                                            break
+                                            
+                                if best_cid:
+                                    contact_id, project_id = best_cid, best_pid
+                                else:
+                                    # Ultimate fallback: We KNOW this belongs to the project via the subject match
+                                    contact_id, project_id = candidate_cids[0][0], candidate_cids[0][1]
                     
                     # 3. Fallback: Deep Body Scan for Bounces
                     # If we haven't found a contact AND it's a bounce, search the body for prospect emails
