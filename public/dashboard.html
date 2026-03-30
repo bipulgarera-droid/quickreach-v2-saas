@@ -469,6 +469,7 @@
 
         const TOP_TABS = [
             { id: 'dashboard', label: 'Dashboard', icon: 'layout-dashboard' },
+            { id: 'replies', label: 'Replies', icon: 'message-circle' },
             { id: 'snapshot', label: 'Daily Snapshot', icon: 'sun' },
             { id: 'contacts', label: 'Contacts', icon: 'users' },
             { id: 'sequences', label: 'Sequences', icon: 'mail' },
@@ -483,6 +484,12 @@
             'dashboard': [
                 { id: 'overview', label: 'Overview' },
                 { id: 'activity', label: 'Recent Activity' }
+            ],
+            'replies': [
+                { id: 'all-replies', label: 'All Replies' },
+                { id: 'positive', label: 'Positive' },
+                { id: 'question', label: 'Questions' },
+                { id: 'needs_review', label: 'Needs Review' }
             ],
             'snapshot': [
                 { id: 'daily', label: 'Today\'s Summary' }
@@ -746,6 +753,7 @@
 
             try {
                 if (currentTopTab === 'dashboard') await loadDashboard(area, actions);
+                else if (currentTopTab === 'replies') await loadReplies(area, actions);
                 else if (currentTopTab === 'snapshot') await loadSnapshot(area, actions);
                 else if (currentTopTab === 'contacts') await loadContacts(area, actions);
                 else if (currentTopTab === 'sequences') await loadSequences(area, actions);
@@ -931,6 +939,191 @@
                 lucide.createIcons();
             } catch (e) {
                 area.innerHTML = `<div class="text-red-400 p-4">Error loading snapshot: ${e.message}</div>`;
+            }
+        }
+
+        // =========================================================================
+        // REPLIES
+        // =========================================================================
+        async function loadReplies(area, actions) {
+            area.innerHTML = `<div class="flex justify-center mt-10"><i data-lucide="loader-2" class="w-6 h-6 animate-spin text-gray-400"></i></div>`;
+            lucide.createIcons();
+
+            try {
+                const res = await apiFetch('/api/replies');
+                const replies = await res.json();
+
+                if (replies.length === 0) {
+                    area.innerHTML = `<div class="flex flex-col items-center justify-center mt-20 text-gray-500"><i data-lucide="message-square" class="w-10 h-10 mb-3 opacity-20"></i><p class="text-sm">No replies detected yet. Keep sending!</p></div>`;
+                    lucide.createIcons();
+                    return;
+                }
+
+                // Filtering based on side-tab
+                let filtered = replies;
+                if (currentSideTab === 'positive') filtered = replies.filter(r => r.sentiment === 'positive');
+                else if (currentSideTab === 'question') filtered = replies.filter(r => r.sentiment === 'question');
+                else if (currentSideTab === 'needs_review') filtered = replies.filter(r => r.reply_status === 'needs_review');
+
+                area.innerHTML = `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-xl shadow-black/20">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="bg-gray-900/80 border-b border-gray-800 text-gray-500 text-[10px] uppercase tracking-widest">
+                                    <th class="text-left px-5 py-3 font-semibold">Prospect</th>
+                                    <th class="text-left px-5 py-3 font-semibold">Sentiment</th>
+                                    <th class="text-left px-5 py-3 font-semibold">Message Preview</th>
+                                    <th class="text-left px-5 py-3 font-semibold">Received</th>
+                                    <th class="text-right px-5 py-3 font-semibold">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-800/50">
+                                ${filtered.map(r => `
+                                    <tr class="hover:bg-gray-800/40 transition-all duration-200 group">
+                                        <td class="px-5 py-4">
+                                            <div class="font-semibold text-white group-hover:text-violet-400 transition-colors">${r.contacts?.name || 'Unknown'}</div>
+                                            <div class="text-[11px] text-gray-500 font-mono">${r.sender_email}</div>
+                                        </td>
+                                        <td class="px-5 py-4">
+                                            ${sentimentBadge(r.sentiment)}
+                                        </td>
+                                        <td class="px-5 py-4 max-w-md">
+                                            <div class="text-gray-300 line-clamp-1 italic text-xs leading-relaxed">${r.body || '(No body)'}</div>
+                                        </td>
+                                        <td class="px-5 py-4 text-gray-500 text-[11px]">
+                                            ${new Date(r.received_at).toLocaleDateString()}
+                                            <div class="text-[10px] opacity-60">${new Date(r.received_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                        </td>
+                                        <td class="px-5 py-4 text-right">
+                                            <button onclick="showReplyModal('${r.id}')" class="text-[11px] font-bold bg-violet-600/10 hover:bg-violet-600 text-violet-400 hover:text-white px-3.5 py-1.5 rounded-lg border border-violet-600/30 transition-all duration-200">
+                                                VIEW & REPLY
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+                lucide.createIcons();
+            } catch (e) {
+                area.innerHTML = `<div class="text-red-400 p-4">Error loading replies: ${e.message}</div>`;
+            }
+        }
+
+        function sentimentBadge(s) {
+            const colors = {
+                positive: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                negative: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+                question: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
+                unsubscribe: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+                neutral: 'bg-gray-800 text-gray-400 border-gray-700'
+            };
+            return `<span class="text-[9px] px-2.5 py-0.5 rounded-full border ${colors[s] || colors.neutral} uppercase font-black tracking-tighter">${s || 'unknown'}</span>`;
+        }
+
+        async function showReplyModal(replyId) {
+            openModal(`<div class="p-20 text-center"><i data-lucide="loader-2" class="w-6 h-6 animate-spin mx-auto mb-2 text-violet-500"></i><p class="text-xs text-gray-500">Pulling conversation...</p></div>`);
+            lucide.createIcons();
+            
+            try {
+                const res = await apiFetch('/api/replies');
+                const all = await res.json();
+                const r = all.find(x => x.id === replyId);
+                
+                if (!r) return closeModal();
+
+                openModal(`
+                    <div class="p-7 max-w-2xl mx-auto">
+                        <div class="flex items-center justify-between mb-8">
+                            <div>
+                                <h2 class="text-2xl font-black text-white tracking-tight">${r.contacts?.name || 'Prospect'}</h2>
+                                <p class="text-xs font-mono text-gray-500 mt-0.5">${r.sender_email}</p>
+                            </div>
+                            <div class="text-right">
+                                ${sentimentBadge(r.sentiment)}
+                                <p class="text-[10px] text-gray-600 mt-2">THREAD ID: ${r.thread_id || 'LOCAL'}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-6 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar mb-8">
+                            <div class="bg-gray-800/40 rounded-2xl p-5 border border-gray-800 shadow-inner">
+                                <div class="flex items-center gap-2 mb-3">
+                                    <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                                    <span class="text-[10px] text-gray-500 uppercase font-black tracking-widest">Incoming Message</span>
+                                </div>
+                                <div class="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed font-medium">${r.body}</div>
+                            </div>
+
+                            ${r.sent_reply ? `
+                                <div class="bg-violet-600/5 rounded-2xl p-5 border border-violet-600/20 shadow-inner">
+                                    <div class="flex items-center gap-2 mb-3">
+                                        <div class="w-1.5 h-1.5 rounded-full bg-violet-500"></div>
+                                        <span class="text-[10px] text-violet-400 uppercase font-black tracking-widest">Your Outgoing Reply</span>
+                                    </div>
+                                    <div class="text-sm text-violet-100 whitespace-pre-wrap leading-relaxed font-medium">${r.sent_reply}</div>
+                                    <div class="text-[9px] text-violet-500/60 mt-3 flex items-center gap-1"><i data-lucide="check-check" class="w-3 h-3"></i> Sent via ${r.recipient_email}</div>
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        ${!r.sent_reply ? `
+                            <div class="space-y-4 pt-4 border-t border-gray-800">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-[10px] text-gray-500 uppercase font-black tracking-widest">Draft Reply</label>
+                                    <span class="text-[9px] text-violet-400/50">SENDING FROM: ${r.recipient_email}</span>
+                                </div>
+                                <textarea id="replyResponseText" rows="6" class="w-full bg-gray-950 border-2 border-gray-800 rounded-2xl px-5 py-4 text-sm text-white outline-none focus:border-violet-600 focus:bg-gray-900 transition-all resize-none shadow-2xl" placeholder="Compose your personal reply..."></textarea>
+                                
+                                <div class="flex gap-4 pt-2">
+                                    <button onclick="closeModal()" class="px-6 bg-gray-800 hover:bg-gray-700 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
+                                    <button onclick="sendManualReply('${r.id}')" id="btnSendReply" class="flex-1 bg-gradient-to-br from-violet-600 to-indigo-700 hover:from-violet-500 hover:to-indigo-600 text-white text-xs font-black uppercase tracking-widest py-3.5 rounded-xl transition-all shadow-xl shadow-violet-900/30 flex items-center justify-center gap-2 group">
+                                        <i data-lucide="send" class="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform"></i>
+                                        Send Threaded Response
+                                    </button>
+                                </div>
+                            </div>
+                        ` : `
+                            <div class="flex justify-center">
+                                <button onclick="closeModal()" class="px-8 bg-gray-800 hover:bg-gray-700 text-white text-xs font-black uppercase tracking-widest py-3 rounded-xl transition-all border border-gray-700">Close Thread</button>
+                            </div>
+                        `}
+                    </div>
+                `);
+                lucide.createIcons();
+            } catch (e) {
+                showToast('Error: ' + e.message);
+                closeModal();
+            }
+        }
+
+        async function sendManualReply(replyId) {
+            const body = document.getElementById('replyResponseText').value.trim();
+            if (!body) return alert('Please enter your response before sending.');
+
+            const btn = document.getElementById('btnSendReply');
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Processing...';
+            btn.disabled = true;
+            lucide.createIcons();
+
+            try {
+                const res = await apiFetch(`/api/replies/${replyId}/send`, {
+                    method: 'POST',
+                    body: JSON.stringify({ body })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                showToast('🚀 Thread updated! Your reply is on its way.');
+                closeModal();
+                loadContent(); 
+            } catch (e) {
+                alert('Delivery Failure: ' + e.message);
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                lucide.createIcons();
             }
         }
 

@@ -1,0 +1,658 @@
+Rank,"Company Name",Domain,domain,name,first_name,email
+23,"Phillips 66",phillips66.com,,,,
+28,"JPMorgan Chase",jpmorganchase.com,,,,
+58,"Tyson Foods",tysonfoods.com,,,,
+53,"Lockheed Martin",lockheedmartin.com,,,,
+60,"Charter Communications",corporate.charter.com,,,,
+72,"Plains GP Holdings",plainsallamerican.com,,,,
+4,"UnitedHealth Group",unitedhealthgroup.com,unitedhealthgroup.com,"Sumeet Sethi",Sumeet,sumeet_sethi@uhc.com
+67,"Enterprise Products Partners",enterpriseproducts.com,,,,
+19,"Marathon Petroleum",marathonpetroleum.com,marathonpetroleum.com,"Jesus Evia Del Puerto Rangel",Jesus,jeviadelpuerto@marathonpetroleum.com
+3,Apple,apple.com,apple.com,"Katrien Bouwman",Katrien,kbouwman@apple.com
+90,Supervalu,supervalu.com,,,,
+11,"Costco Wholesale",costco.com,costco.com,"Andrea Boyle",Andrea,aboyle@costco.com
+48,MetLife,metlife.com,metlife.com,"Laura Snape",Laura,laura.snape@metlife.com
+40,Boeing,boeing.com,boeing.com,"Darshini Perera",Darshini,darshini.perera@boeing.com
+51,"Walt Disney",disney.com,disney.com,"Claudia Neufeld",Claudia,claudia.neufeld@disney.com
+14,Microsoft,microsoft.com,microsoft.com,"Paolo Modolo",Paolo,paolomodolo@microsoft.com
+57,Deere,deere.com,deere.com,"John Deere",John,johndeere@deere.com
+50,Sysco,sysco.com,sysco.com,"Colin Staunton",Colin,colin-staunton@sysco.com
+45,PepsiCo,pepsico.com,pepsico.com,"Shailja Joshi",Shailja,shailja.joshi@pepsico.com
+7,"Exxon Mobil",exxonmobil.com,exxonmobil.com,"Robert Shearer",Robert,robert.j.shearer@exxonmobil.com
+100,"International Paper",internationalpaper.com,,,,
+52,HP,hp.com,hp.com,"Shivani Chopra",Shivani,shivani.chopra@hp.com
+56,"Liberty Mutual Insurance Group",libertymutual.com,libertymutual.com,"Jaclyn Kapnis Pelletier",Jaclyn,jaclyn.kapnis@libertymutual.com
+6,"CVS Health",cvshealth.com,cvshealth.com,"Albert Chang",Albert,albert.chang@cvshealth.com
+87,"United Natural Foods",unfi.com,unfi.com,"Jamie Lyn Sjoquist",Jamie,jamie.sjoquist@unfi.com
+27,"Verizon Communications",verizon.com,verizon.com,"Marie Thornton",Marie,marie.thornton@verizon.com
+59,"American International Group",aig.com,aig.com,"Lea Wilkes",Lea,lea.wilkes@aig.com
+78,AbbVie,abbvie.com,abbvie.com,"Kanchan Yadav",Kanchan,kanchan.yadav@abbvie.com
+17,"Home Depot",homedepot.com,
+65,"Tech Data",techdata.com,techdata.com,"Claire Saines",Claire,claire.saines@techdata.com
+85,"Morgan Stanley",morganstanley.com,morganstanley.com,"Lisa Mcbreen",Lisa,lisa.mcbreen@morganstanley.com
+39,"Raytheon Technologies",rtx.com,rtx.com,"Nicole Lightbourne",Nicole,nicole.lightbourne@rtx.com
+16,Chevron,chevron.com,chevron.com,"Tehan Samarasinha",Tehan,tehan.samarasinha@chevron.com
+21,Kroger,kroger.com,kroger.com,"Lillie Reader",Lillie,lillie.reader@kroger.com
+77,"HCA Healthcare",hcahealthcare.com,hcahealthcare.com,"Jill S Newham",Jill,jill.newham@hcahealthcare.com
+84,Kohl's,kohls.com,kohls.com,"Michael Schlissel",Michael,michael.schlissel@kohls.com
+95,"Capital One Financial",capitalone.com,capitalone.com,"Jesse Karassik",Jesse,jesse.karassik@capitalone.com
+66,CHS,chsinc.com,chsinc.com,"Romuald Veru",Romuald,romuald.veru@chsinc.com
+49,"Wells Fargo",wellsfargo.com,wellsfargo.com,"Katherine Brown Mach",Katherine,katherine.brown@wellsfargo.com
+79,"Abbott Laboratories",abbott.com,abbott.com,"Priyanka Menda",Priyanka,priyanka.menda@abbott.com
+22,"Fannie Mae",fanniemae.com,fanniemae.com,"Natalie Park",Natalie,natalie_park@fanniemae.com
+20,"Elevance Health",elevancehealth.com,elevancehealth.com,"Julie Irving",Julie,julie.irving@elevancehealth.com
+112,Aramark,aramark.com,aramark.com,"John Kandemir",John,kandemir-john@aramark.com
+68,"Publix Super Markets",publix.com,
+76,Lowe's,lowes.com,lowes.com,"Debbie Lee",Debbie,dlee@lowes.com
+113,"Marriott International",marriott.com,marriott.com,"Laura Golder",Laura,laura.golder@marriott.com
+126,"Northrop Grumman",northropgrumman.com,,,,
+30,"Meta Platforms",meta.com,meta.com,"Jimena Flores",Jimena,jflores@meta.com
+128,Freeport-McMoRan,fcx.com,,,,
+8,Alphabet,abc.xyz,
+9,McKesson,mckesson.com,mckesson.com,"Katherine Dolson",Katherine,katherine.dolson@mckesson.com
+37,"Procter & Gamble",pg.com,pg.com,"Freddy Bharucha",Freddy,bharucha.f@pg.com
+101,Avnet,avnet.com,avnet.com,"Eric Chang",Eric,eric.chang@avnet.com
+99,"Massachusetts Mutual Life Insurance",MassMutual.com,MassMutual.com,"Kathleen Mayko",Kathleen,kmayko@massmutual.com
+91,Lenovo,lenovo.com,lenovo.com,"Anna Staszynska",Anna,astaszynska@lenovo.com
+115,CDW,cdw.com,cdw.com,"Jacqueline Macera",Jacqueline,jacqueline.macera@cdw.com
+24,"Valero Energy",valero.com,valero.com,"Beth Herd",Beth,beth.herd@valero.com
+116,"Principal Financial Group",principal.com,principal.com,"Laura Tofteland",Laura,tofteland.laura@principal.com
+43,"Archer Daniels Midland",adm.com,adm.com,"David Douglas",David,david.douglas@adm.com
+1,Walmart,walmart.com,walmart.com,"Frank Barbieri",Frank,fbarbieri@walmart.com
+89,Travelers,travelers.com,travelers.com,"Mark Wright",Mark,mark.wright@travelers.com
+44,"United Parcel Service",ups.com,ups.com,"James Walton",James,jameswalton@ups.com
+109,AutoNation,autonation.com,autonation.com,"Claudia Martinez",Claudia,martinezc@autonation.com
+108,"American Tower",americantower.com,
+47,FedEx,fedex.com,fedex.com,"Tanya Champaign",Tanya,tanya.champaign@fedex.com
+34,Target,target.com,target.com,"Fred Clark",Fred,fred.clark@target.com
+130,PG&E,pge.com,pge.com,"Erika Wasmund",Erika,erika.wasmund@pge.com
+71,"Energy Transfer",energytransfer.com,energytransfer.com,"Beth Hickey",Beth,beth.hickey@energytransfer.com
+12,Cigna,cigna.com,cigna.com,"Sarah Tam",Sarah,sarah.tam@cigna.com
+42,Humana,humana.com,humana.com,"Eduardo Pujol",Eduardo,epujol@humana.com
+110,Chubb,chubb.com,chubb.com,"Tine Thorsen",Tine,tine.thorsen@chubb.com
+61,ConocoPhillips,conocophillips.com,conocophillips.com,"Sean Watson",Sean,sean.watson@conocophillips.com
+152,"Old Republic International",,,,,
+"Continuing from the previous list"," here are the primary domains for the remaining Fortune 500 companies:",,,,,
+Rank,"Company Name",Domain,,,,
+124,"CBRE Group",cbre.com,cbre.com,"Leslie Motiwalla",Leslie,leslie.motiwalla@cbre.com
+104,McKesson,mckesson.com,mckesson.com,"Jim Marasco",Jim,jim.marasco@mckesson.com
+122,Danaher,danaher.com,
+145,Mastercard,mastercard.com,mastercard.com,"Sasa Mester",Sasa,sasa.mester@mastercard.com
+155,"Auto-Owners Insurance",auto-owners.com,,,,
+125,"PayPal Holdings",paypal.com,paypal.com,"Leanne Sheraton",Leanne,lsheraton@paypal.com
+139,"American Family Insurance Group",amfam.com,amfam.com,"Michele Martinez Wingate",Michele,mwingate@amfam.com
+158,"American Family Insurance Group",amfam.com,amfam.com,"Michele Martinez Wingate",Michele,mwingate@amfam.com
+159,Avnet,avnet.com,avnet.com,"Eric Chang",Eric,eric.chang@avnet.com
+160,Freeport-McMoRan,fcx.com,,,,
+161,"Principal Financial Group",principal.com,principal.com,"Laura Tofteland",Laura,tofteland.laura@principal.com
+143,BlackRock,blackrock.com,blackrock.com,"Pieter Nelissen",Pieter,pieter.nelissen@blackrock.com
+129,ViacomCBS,viacomcbs.com,viacomcbs.com,"Carley Cavanaugh",Carley,carley.cavanaugh@viacomcbs.com
+83,Oracle,oracle.com,oracle.com,"Tim Carr",Tim,timothy.carr@oracle.com
+96,"Northwestern Mutual",northwesternmutual.com,northwesternmutual.com,"Lori M Ham",Lori,lori.ham@nm.com
+111,Amgen,amgen.com,amgen.com,"Martin Zanni",Martin,mzanni@amgen.com
+29,Centene,centene.com,
+168,BlackRock,blackrock.com,blackrock.com,"Pieter Nelissen",Pieter,pieter.nelissen@blackrock.com
+123,"DXC Technology",dxc.technology,
+127,"General Mills",generalmills.com,generalmills.com,"Jorge Robles",Jorge,jorge.robles@generalmills.com
+170,Mastercard,mastercard.com,mastercard.com,"Sasa Mester",Sasa,sasa.mester@mastercard.com
+94,3M,3m.com,3m.com,"Chitkala Nishandar",Chitkala,cnishandar@3m.com
+144,WestRock,westrock.com,westrock.com,"Rachel Gilmore",Rachel,rachel.gilmore@westrock.com
+153,PVH,pvh.com,pvh.com,"Anita Koncabahar",Anita,anitakoncabahar@pvh.com
+107,CarMax,carmax.com,carmax.com,"John Crimmins",John,john_crimmins@carmax.com
+176,"Marriott International",marriott.com,marriott.com,"Laura Golder",Laura,laura.golder@marriott.com
+80,"Arrow Electronics",arrow.com,arrow.com,"Laura Reed",Laura,laura.reed@arrow.com
+178,CDW,cdw.com,cdw.com,"Jacqueline Macera",Jacqueline,jacqueline.macera@cdw.com
+32,Intel,intel.com,intel.com,"Stefan Vogt",Stefan,stefan.vogt@intel.com
+142,"Jacobs Engineering Group",jacobs.com,jacobs.com,"Rafhanah Hamid",Rafhanah,rafhanah.hamid@jacobs.com
+169,WestRock,westrock.com,westrock.com,"Rachel Gilmore",Rachel,rachel.gilmore@westrock.com
+10,AmerisourceBergen,amerisourcebergen.com,amerisourcebergen.com,"Frank Jorfi",Frank,frank.jorfi@amerisourcebergen.com
+118,"Consolidated Edison",coned.com,coned.com,"Robbie Wang",Robbie,wangr@coned.com
+75,Pfizer,pfizer.com,pfizer.com,"Lara Mcclelland",Lara,lara.mcclelland@pfizer.com
+185,"CBRE Group",cbre.com,cbre.com,"Leslie Motiwalla",Leslie,leslie.motiwalla@cbre.com
+186,"PayPal Holdings",paypal.com,paypal.com,"Leanne Sheraton",Leanne,lsheraton@paypal.com
+187,"Northrop Grumman",northropgrumman.com,,,,
+188,"General Mills",generalmills.com,generalmills.com,"Jorge Robles",Jorge,jorge.robles@generalmills.com
+93,Exelon,exeloncorp.com,exeloncorp.com,"Xiying Lin",Xiying,xiying.lin@exeloncorp.com
+190,Freeport-McMoRan,fcx.com,,,,
+191,ViacomCBS,viacomcbs.com,viacomcbs.com,"Carley Cavanaugh",Carley,carley.cavanaugh@viacomcbs.com
+192,PG&E,pge.com,pge.com,"Erika Wasmund",Erika,erika.wasmund@pge.com
+180,"Emerson Electric",emerson.com,emerson.com,"Jacalyn High",Jacalyn,jacalyn.high@emerson.com
+31,Comcast,corporate.comcast.com,corporate.comcast.com,"Lynne Pressley",Lynne,lynne.pressley@comcast.com
+117,Halliburton,halliburton.com,halliburton.com,"Sean Whitehead",Sean,sean.whitehead@halliburton.com
+167,"Jacobs Engineering Group",jacobs.com,jacobs.com,"Andrew Jacobs",Andrew,andrew.jacobs@jacobs.com
+119,"Altria Group",altria.com,altria.com,"Sravanthy Bollam",Sravanthy,bollams@altria.com
+198,Exelon,exeloncorp.com,exeloncorp.com,"Xiying Lin",Xiying,xiying.lin@exeloncorp.com
+199,3M,3m.com,3m.com,"Chitkala Nishandar",Chitkala,cnishandar@3m.com
+200,"Capital One Financial",capitalone.com,capitalone.com,"Jesse Karassik",Jesse,jesse.karassik@capitalone.com
+201,"Northwestern Mutual",northwesternmutual.com,northwesternmutual.com,"Lori M Ham",Lori,lori.ham@nm.com
+138,"Guardian Life Ins. Co. of America",guardianlife.com,guardianlife.com,"Colleen Tuohy",Colleen,colleentuohy@guardianlife.com
+166,FirstEnergy,firstenergycorp.com,firstenergycorp.com,"Brett Reynolds",Brett,breynolds@firstenergycorp.com
+204,"International Paper",internationalpaper.com,,,,
+136,"Emerson Electric",emerson.com,emerson.com,"Jacalyn High",Jacalyn,jacalyn.high@emerson.com
+205,Avnet,avnet.com,avnet.com,"Eric Chang",Eric,eric.chang@avnet.com
+163,"Altria Group",altria.com,altria.com,"Melanie Wu",Melanie,wum@altria.com
+183,Danaher,danaher.com,
+156,"NRG Energy",nrg.com,nrg.com,"Anna Altinger",Anna,anna.altinger@nrg.com
+210,CarMax,carmax.com,carmax.com,"John Crimmins",John,john_crimmins@carmax.com
+171,"NextEra Energy",nexteraenergy.com,
+106,Fluor,fluor.com,
+212,Chubb,chubb.com,chubb.com,"Tine Thorsen",Tine,tine.thorsen@chubb.com
+213,Amgen,amgen.com,amgen.com,"Martin Zanni",Martin,mzanni@amgen.com
+215,"Marriott International",marriott.com,marriott.com,"Laura Golder",Laura,laura.golder@marriott.com
+140,"Quanta Services",quantaservices.com,quantaservices.com,"Jose Duarte",Jose,jose.duarte@quantaservices.com
+217,CDW,cdw.com,cdw.com,"Jacqueline Macera",Jacqueline,jacqueline.macera@cdw.com
+218,"Principal Financial Group",principal.com,principal.com,"Laura Tofteland",Laura,tofteland.laura@principal.com
+219,Halliburton,halliburton.com,halliburton.com,"Sean Whitehead",Sean,sean.whitehead@halliburton.com
+220,"Consolidated Edison",coned.com,coned.com,"Robbie Wang",Robbie,wangr@coned.com
+221,"Altria Group",altria.com,altria.com,"Melanie Wu",Melanie,wum@altria.com
+214,Aramark,aramark.com,aramark.com,"John Kandemir",John,kandemir-john@aramark.com
+184,"DXC Technology",dxc.technology,
+55,"Goldman Sachs Group",goldmansachs.com,
+5,"Berkshire Hathaway",berkshirehathaway.com,
+226,"CBRE Group",cbre.com,cbre.com,"Leslie Motiwalla",Leslie,leslie.motiwalla@cbre.com
+227,"PayPal Holdings",paypal.com,paypal.com,"Leanne Sheraton",Leanne,lsheraton@paypal.com
+228,"Northrop Grumman",northropgrumman.com,,,,
+229,"General Mills",generalmills.com,generalmills.com,"Jorge Robles",Jorge,jorge.robles@generalmills.com
+230,Freeport-McMoRan,fcx.com,,,,
+231,ViacomCBS,viacomcbs.com,viacomcbs.com,"Carley Cavanaugh",Carley,carley.cavanaugh@viacomcbs.com
+232,PG&E,pge.com,pge.com,"Erika Wasmund",Erika,erika.wasmund@pge.com
+69,Allstate,allstate.com,allstate.com,"Kellyn Battrell",Kellyn,kellyn.battrell@allstate.com
+46,"General Electric",ge.com,
+18,"Walgreens Boots Alliance",walgreensbootsalliance.com,
+86,"US Foods Holding",usfoods.com,
+179,Halliburton,halliburton.com,halliburton.com,"Sean Whitehead",Sean,sean.whitehead@halliburton.com
+238,"Emerson Electric",emerson.com,emerson.com,"Jacalyn High",Jacalyn,jacalyn.high@emerson.com
+211,"American Tower",americantower.com,
+240,"Guardian Life Insurance",guardianlife.com,guardianlife.com,"Colleen Tuohy",Colleen,colleentuohy@guardianlife.com
+241,"American Family Insurance Group",amfam.com,amfam.com,"Michele Martinez Wingate",Michele,mwingate@amfam.com
+242,"Quanta Services",quantaservices.com,quantaservices.com,"Jose Duarte",Jose,jose.duarte@quantaservices.com
+243,FirstEnergy,firstenergycorp.com,firstenergycorp.com,"Brett Reynolds",Brett,breynolds@firstenergycorp.com
+244,"Jacobs Engineering Group",jacobs.com,jacobs.com,"Andrew Jacobs",Andrew,andrew.jacobs@jacobs.com
+245,BlackRock,blackrock.com,blackrock.com,"Pieter Nelissen",Pieter,pieter.nelissen@blackrock.com
+164,Entergy,entergy.com,entergy.com,"Kerry Evans",Kerry,kevans@entergy.com
+2,Amazon,amazon.com,
+246,WestRock,westrock.com,westrock.com,"Rachel Gilmore",Rachel,rachel.gilmore@westrock.com
+247,Mastercard,mastercard.com,mastercard.com,"Sasa Mester",Sasa,sasa.mester@mastercard.com
+33,"State Farm Insurance",statefarm.com,
+38,IBM,ibm.com,ibm.com,"Mariana Lemos",Mariana,mariana.lemos@ibm.com
+197,"American Airlines Group",aa.com,aa.com,"David Dean",David,dean.david@aa.com
+141,FirstEnergy,firstenergycorp.com,firstenergycorp.com,"Brett Reynolds",Brett,breynolds@firstenergycorp.com
+120,"Union Pacific",up.com,
+255,PVH,pvh.com,pvh.com,"Anita Koncabahar",Anita,anitakoncabahar@pvh.com
+134,Entergy,entergy.com,entergy.com,"Kerry Evans",Kerry,kevans@entergy.com
+257,"Auto-Owners Insurance",auto-owners.com,,,,
+258,"NRG Energy",nrg.com,nrg.com,"Anna Altinger",Anna,anna.altinger@nrg.com
+174,Starbucks,starbucks.com,starbucks.com,"Katie Taylor",Katie,ktaylor@starbucks.com
+260,"American Family Insurance Group",amfam.com,amfam.com,"Michele Martinez Wingate",Michele,mwingate@amfam.com
+261,Avnet,avnet.com,avnet.com,"Eric Chang",Eric,eric.chang@avnet.com
+262,Freeport-McMoRan,fcx.com,,,,
+263,"Principal Financial Group",principal.com,principal.com,"Laura Tofteland",Laura,tofteland.laura@principal.com
+264,"Consolidated Edison",coned.com,coned.com,"Robbie Wang",Robbie,wangr@coned.com
+265,"Altria Group",altria.com,altria.com,"Melanie Wu",Melanie,wum@altria.com
+266,Entergy,entergy.com,entergy.com,"Kerry Evans",Kerry,kevans@entergy.com
+15,"Cardinal Health",cardinalhealth.com,cardinalhealth.com,"Wendy Wu",Wendy,wendy.wu@cardinalhealth.com
+267,"Guardian Life Insurance",guardianlife.com,guardianlife.com,"Colleen Tuohy",Colleen,colleentuohy@guardianlife.com
+268,FirstEnergy,firstenergycorp.com,firstenergycorp.com,"Brett Reynolds",Brett,breynolds@firstenergycorp.com
+269,"Jacobs Engineering Group",jacobs.com,jacobs.com,"Andrew Jacobs",Andrew,andrew.jacobs@jacobs.com
+270,BlackRock,blackrock.com,blackrock.com,"Pieter Nelissen",Pieter,pieter.nelissen@blackrock.com
+271,WestRock,westrock.com,westrock.com,"Rachel Gilmore",Rachel,rachel.gilmore@westrock.com
+272,Mastercard,mastercard.com,mastercard.com,"Sasa Mester",Sasa,sasa.mester@mastercard.com
+236,Entergy,entergy.com,entergy.com,"Kerry Evans",Kerry,kevans@entergy.com
+92,"American Airlines Group",aa.com,aa.com,"Kimberly Robinson",Kimberly,kimberly.robinson@aa.com
+276,Starbucks,starbucks.com,starbucks.com,"Katie Taylor",Katie,ktaylor@starbucks.com
+182,"Quanta Services",quantaservices.com,quantaservices.com,"Jose Duarte",Jose,jose.duarte@quantaservices.com
+278,"Marriott International",marriott.com,marriott.com,"Laura Golder",Laura,laura.golder@marriott.com
+103,Albertsons,albertsonscompanies.com,
+41,Citigroup,citigroup.com,
+280,CDW,cdw.com,cdw.com,"Jacqueline Macera",Jacqueline,jacqueline.macera@cdw.com
+281,Halliburton,halliburton.com,halliburton.com,"Sean Whitehead",Sean,sean.whitehead@halliburton.com
+282,"Emerson Electric",emerson.com,emerson.com,"Jacalyn High",Jacalyn,jacalyn.high@emerson.com
+224,Danaher,danaher.com,
+284,"Quanta Services",quantaservices.com,quantaservices.com,"Jose Duarte",Jose,jose.duarte@quantaservices.com
+81,"General Dynamics",generaldynamics.com,
+287,"CBRE Group",cbre.com,cbre.com,"Leslie Motiwalla",Leslie,leslie.motiwalla@cbre.com
+288,"PayPal Holdings",paypal.com,paypal.com,"Leanne Sheraton",Leanne,lsheraton@paypal.com
+289,"Northrop Grumman",northropgrumman.com,,,,
+290,"General Mills",generalmills.com,generalmills.com,"Jorge Robles",Jorge,jorge.robles@generalmills.com
+26,"Ford Motor",ford.com,
+292,Freeport-McMoRan,fcx.com,,,,
+293,ViacomCBS,viacomcbs.com,viacomcbs.com,"Carley Cavanaugh",Carley,carley.cavanaugh@viacomcbs.com
+102,"Philip Morris International",pmiscience.com,
+273,"NextEra Energy",nexteraenergy.com,
+294,PG&E,pge.com,pge.com,"Erika Wasmund",Erika,erika.wasmund@pge.com
+296,"Tenet Healthcare","tenethealth.com ",,,,
+Rank,"Company Name",Domain,,,,
+165,"Guardian Life Insurance",guardianlife.com,guardianlife.com,"Colleen Tuohy",Colleen,colleentuohy@guardianlife.com
+153,PVH,pvh.com,pvh.com,"Anita Koncabahar",Anita,anitakoncabahar@pvh.com
+70,"Delta Air Lines",delta.com,
+155,"Auto-Owners Insurance",auto-owners.com,,,,
+156,"NRG Energy",nrg.com,nrg.com,"Anna Altinger",Anna,anna.altinger@nrg.com
+73,"Best Buy",bestbuy.com,bestbuy.com,"Tara Estee",Tara,tara.estee@bestbuy.com
+158,"American Family Insurance Group",amfam.com,amfam.com,"Michele Martinez Wingate",Michele,mwingate@amfam.com
+159,Avnet,avnet.com,avnet.com,"Eric Chang",Eric,eric.chang@avnet.com
+160,Freeport-McMoRan,fcx.com,,,,
+161,"Principal Financial Group",principal.com,principal.com,"Laura Tofteland",Laura,tofteland.laura@principal.com
+162,"Consolidated Edison",coned.com,coned.com,"Robbie Wang",Robbie,wangr@coned.com
+105,ManpowerGroup,manpowergroup.com,manpowergroup.com,"Gareth Vale",Gareth,gareth.vale@manpowergroup.com
+164,Entergy,entergy.com,entergy.com,"Kerry Evans",Kerry,kevans@entergy.com
+165,"Guardian Life Insurance",guardianlife.com,guardianlife.com,"Colleen Tuohy",Colleen,colleentuohy@guardianlife.com
+166,FirstEnergy,firstenergycorp.com,firstenergycorp.com,"Brett Reynolds",Brett,breynolds@firstenergycorp.com
+167,"Jacobs Engineering Group",jacobs.com,jacobs.com,"Andrew Jacobs",Andrew,andrew.jacobs@jacobs.com
+168,BlackRock,blackrock.com,blackrock.com,"Pieter Nelissen",Pieter,pieter.nelissen@blackrock.com
+163,"Altria Group",altria.com,altria.com,"Melanie Wu",Melanie,wum@altria.com
+169,WestRock,westrock.com,westrock.com,"Rachel Gilmore",Rachel,rachel.gilmore@westrock.com
+170,Mastercard,mastercard.com,mastercard.com,"Sasa Mester",Sasa,sasa.mester@mastercard.com
+35,Anthem,anthem.com,
+135,"Omnicom Group",omnicomgroup.com,
+174,Starbucks,starbucks.com,starbucks.com,"Katie Taylor",Katie,ktaylor@starbucks.com
+285,Danaher,danaher.com,
+176,"Marriott International",marriott.com,marriott.com,"Laura Golder",Laura,laura.golder@marriott.com
+63,"World Fuel Services",worldfuel.com,
+171,"NextEra Energy",nexteraenergy.com,
+178,CDW,cdw.com,cdw.com,"Jacqueline Macera",Jacqueline,jacqueline.macera@cdw.com
+180,"Emerson Electric",emerson.com,emerson.com,"Jacalyn High",Jacalyn,jacalyn.high@emerson.com
+179,Halliburton,halliburton.com,halliburton.com,"Sean Whitehead",Sean,sean.whitehead@halliburton.com
+182,"Quanta Services",quantaservices.com,quantaservices.com,"Jose Duarte",Jose,jose.duarte@quantaservices.com
+98,"American Electric Power",aep.com,
+251,Starbucks,starbucks.com,starbucks.com,"Ritvik Thomas",Ritvik,rthomas@starbucks.com
+185,"CBRE Group",cbre.com,cbre.com,"Leslie Motiwalla",Leslie,leslie.motiwalla@cbre.com
+186,"PayPal Holdings",paypal.com,paypal.com,"Leanne Sheraton",Leanne,lsheraton@paypal.com
+54,"Freddie Mac",freddiemac.com,
+188,"General Mills",generalmills.com,generalmills.com,"Jorge Robles",Jorge,jorge.robles@generalmills.com
+187,"Northrop Grumman",northropgrumman.com,,,,
+190,ViacomCBS,viacomcbs.com,viacomcbs.com,"Carley Cavanaugh",Carley,carley.cavanaugh@viacomcbs.com
+191,PG&E,pge.com,pge.com,"Erika Wasmund",Erika,erika.wasmund@pge.com
+173,"Discover Financial Services",discover.com,
+62,"New York Life Insurance",newyorklife.com,newyorklife.com,"Hiren Shah",Hiren,hshah@newyorklife.com
+132,"Tenet Healthcare",tenethealth.com,
+194,"Tenet Healthcare",tenethealth.com,
+196,"American Airlines Group",aa.com,aa.com,"Kimberly Robinson",Kimberly,kimberly.robinson@aa.com
+197,Exelon,exeloncorp.com,exeloncorp.com,"Xiying Lin",Xiying,xiying.lin@exeloncorp.com
+198,3M,3m.com,3m.com,"Chitkala Nishandar",Chitkala,cnishandar@3m.com
+199,"Capital One Financial",capitalone.com,capitalone.com,"Jesse Karassik",Jesse,jesse.karassik@capitalone.com
+200,"Northwestern Mutual",northwesternmutual.com,northwesternmutual.com,"Lori M Ham",Lori,lori.ham@nm.com
+148,"Discover Financial Services",discover.com,
+202,"International Paper",internationalpaper.com,,,,
+151,"Estee Lauder",elcompanies.com,
+207,Albertsons,albertsonscompanies.com,
+205,ManpowerGroup,manpowergroup.com,manpowergroup.com,"Gareth Vale",Gareth,gareth.vale@manpowergroup.com
+114,Kimberly-Clark,kimberly-clark.com,
+207,CarMax,carmax.com,carmax.com,"John Crimmins",John,john_crimmins@carmax.com
+25,"General Motors",gm.com,
+209,Chubb,chubb.com,chubb.com,"Tine Thorsen",Tine,tine.thorsen@chubb.com
+210,Amgen,amgen.com,amgen.com,"Martin Zanni",Martin,mzanni@amgen.com
+211,Aramark,aramark.com,aramark.com,"John Kandemir",John,kandemir-john@aramark.com
+212,"Principal Financial Group",principal.com,principal.com,"Laura Tofteland",Laura,tofteland.laura@principal.com
+189,Amphenol,amphenol.com,
+286,"DXC Technology",dxc.technology,
+215,Entergy,entergy.com,entergy.com,"Kerry Evans",Kerry,kevans@entergy.com
+216,"Guardian Life Insurance",guardianlife.com,guardianlife.com,"Colleen Tuohy",Colleen,colleentuohy@guardianlife.com
+217,FirstEnergy,firstenergycorp.com,firstenergycorp.com,"Brett Reynolds",Brett,breynolds@firstenergycorp.com
+225,"DXC Technology",dxc.technology,
+219,BlackRock,blackrock.com,blackrock.com,"Pieter Nelissen",Pieter,pieter.nelissen@blackrock.com
+220,WestRock,westrock.com,westrock.com,"Rachel Gilmore",Rachel,rachel.gilmore@westrock.com
+221,Mastercard,mastercard.com,mastercard.com,"Sasa Mester",Sasa,sasa.mester@mastercard.com
+154,"TravelCenters of America",ta-petro.com,ta-petro.com,"Mel S Anderson",Mel,manderson@ta-petro.com
+218,"Jacobs Engineering Group",jacobs.com,jacobs.com,"Andrew Jacobs",Andrew,andrew.jacobs@jacobs.com
+183,Danaher,danaher.com,
+225,Starbucks,starbucks.com,starbucks.com,"Ritvik Thomas",Ritvik,rthomas@starbucks.com
+196,"Omnicom Group",omnicomgroup.com,
+234,"Tenet Healthcare",tenethealth.com,
+150,"Leidos Holdings",leidos.com,
+229,PVH,pvh.com,pvh.com,"Anita Koncabahar",Anita,anitakoncabahar@pvh.com
+230,"TravelCenters of America",ta-petro.com,ta-petro.com,"Mel S Anderson",Mel,manderson@ta-petro.com
+231,"Auto-Owners Insurance",auto-owners.com,,,,
+232,"NRG Energy",nrg.com,nrg.com,"Anna Altinger",Anna,anna.altinger@nrg.com
+131,Colgate-Palmolive,colgate.com,
+234,"American Family Insurance Group",amfam.com,amfam.com,"Michele Martinez Wingate",Michele,mwingate@amfam.com
+235,Avnet,avnet.com,avnet.com,"Eric Chang",Eric,eric.chang@avnet.com
+236,Freeport-McMoRan,fcx.com,,,,
+147,"Global Partners",globalp.com,
+237,"Consolidated Edison",coned.com,coned.com,"Robbie Wang",Robbie,wangr@coned.com
+238,"Altria Group",altria.com,altria.com,"Melanie Wu",Melanie,wum@altria.com
+239,Entergy,entergy.com,entergy.com,"Kerry Evans",Kerry,kevans@entergy.com
+240,"Guardian Life Insurance",guardianlife.com,guardianlife.com,"Colleen Tuohy",Colleen,colleentuohy@guardianlife.com
+241,FirstEnergy,firstenergycorp.com,firstenergycorp.com,"Brett Reynolds",Brett,breynolds@firstenergycorp.com
+242,"Jacobs Engineering Group",jacobs.com,jacobs.com,"Andrew Jacobs",Andrew,andrew.jacobs@jacobs.com
+243,BlackRock,blackrock.com,blackrock.com,"Pieter Nelissen",Pieter,pieter.nelissen@blackrock.com
+244,WestRock,westrock.com,westrock.com,"Rachel Gilmore",Rachel,rachel.gilmore@westrock.com
+245,Mastercard,mastercard.com,mastercard.com,"Sasa Mester",Sasa,sasa.mester@mastercard.com
+208,"American Tower",americantower.com,
+146,"NextEra Energy",nexteraenergy.com,
+249,Starbucks,starbucks.com,starbucks.com,"Ritvik Thomas",Ritvik,rthomas@starbucks.com
+181,Gap,gapinc.com,
+152,"Old Republic International",oldrepublic.com,
+251,"Marriott International",marriott.com,marriott.com,"Laura Golder",Laura,laura.golder@marriott.com
+253,CDW,cdw.com,cdw.com,"Jacqueline Macera",Jacqueline,jacqueline.macera@cdw.com
+254,Halliburton,halliburton.com,halliburton.com,"Sean Whitehead",Sean,sean.whitehead@halliburton.com
+255,"Emerson Electric",emerson.com,emerson.com,"Jacalyn High",Jacalyn,jacalyn.high@emerson.com
+184,"DXC Technology",dxc.technology,
+149,Starbucks,starbucks.com,starbucks.com,"Ritvik Thomas",Ritvik,rthomas@starbucks.com
+257,"Quanta Services",quantaservices.com,quantaservices.com,"Jose Duarte",Jose,jose.duarte@quantaservices.com
+203,"American Electric Power",aep.com,
+260,"CBRE Group",cbre.com,cbre.com,"Leslie Motiwalla",Leslie,leslie.motiwalla@cbre.com
+261,"PayPal Holdings",paypal.com,paypal.com,"Leanne Sheraton",Leanne,lsheraton@paypal.com
+262,"Northrop Grumman",northropgrumman.com,,,,
+263,"General Mills",generalmills.com,generalmills.com,"Jorge Robles",Jorge,jorge.robles@generalmills.com
+157,"American Electric Power",aep.com,
+265,ViacomCBS,viacomcbs.com,viacomcbs.com,"Carley Cavanaugh",Carley,carley.cavanaugh@viacomcbs.com
+266,PG&E,pge.com,pge.com,"Erika Wasmund",Erika,erika.wasmund@pge.com
+209,Fluor,fluor.com,
+137,Gap,gapinc.com,
+206,"Philip Morris International",pmiscience.com,
+64,"American Express",americanexpress.com,
+271,"American Airlines Group",aa.com,aa.com,"Kimberly Robinson",Kimberly,kimberly.robinson@aa.com
+272,Exelon,exeloncorp.com,exeloncorp.com,"Xiying Lin",Xiying,xiying.lin@exeloncorp.com
+151,"Estee Lauder",elcompanies.com,
+273,3M,3m.com,3m.com,"Chitkala Nishandar",Chitkala,cnishandar@3m.com
+274,"Capital One Financial",capitalone.com,capitalone.com,"Jesse Karassik",Jesse,jesse.karassik@capitalone.com
+275,"Northwestern Mutual",northwesternmutual.com,northwesternmutual.com,"Lori M Ham",Lori,lori.ham@nm.com
+246,"NextEra Energy",nexteraenergy.com,
+237,"Omnicom Group",omnicomgroup.com,
+277,"International Paper",internationalpaper.com,,,,
+280,ManpowerGroup,manpowergroup.com,manpowergroup.com,"Gareth Vale",Gareth,gareth.vale@manpowergroup.com
+208,ManpowerGroup,manpowergroup.com,manpowergroup.com,"Gareth Vale",Gareth,gareth.vale@manpowergroup.com
+282,CarMax,carmax.com,carmax.com,"John Crimmins",John,john_crimmins@carmax.com
+162,"Consolidated Edison",coned.com,coned.com,"Mark Chapman",Mark,chapmanm@coned.com
+284,Chubb,chubb.com,chubb.com,"Tine Thorsen",Tine,tine.thorsen@chubb.com
+285,Amgen,amgen.com,amgen.com,"Martin Zanni",Martin,mzanni@amgen.com
+286,Aramark,aramark.com,aramark.com,"John Kandemir",John,kandemir-john@aramark.com
+287,"Principal Financial Group",principal.com,principal.com,"Laura Tofteland",Laura,tofteland.laura@principal.com
+175,"Leidos Holdings",leidos.com,
+74,USAA,usaa.com,usaa.com,"Kathleen Lyons",Kathleen,kathleen.lyons@usaa.com
+290,Entergy,entergy.com,entergy.com,"Kerry Evans",Kerry,kevans@entergy.com
+291,"Guardian Life Insurance",guardianlife.com,guardianlife.com,"Colleen Tuohy",Colleen,colleentuohy@guardianlife.com
+254,"Old Republic International",oldrepublic.com,
+293,"Jacobs Engineering Group",jacobs.com,jacobs.com,"Andrew Jacobs",Andrew,andrew.jacobs@jacobs.com
+294,BlackRock,blackrock.com,blackrock.com,"Pieter Nelissen",Pieter,pieter.nelissen@blackrock.com
+295,WestRock,westrock.com,westrock.com,"Rachel Gilmore",Rachel,rachel.gilmore@westrock.com
+296,Mastercard,mastercard.com,mastercard.com,"Sasa Mester",Sasa,sasa.mester@mastercard.com
+292,FirstEnergy,firstenergycorp.com,firstenergycorp.com,"Brett Reynolds",Brett,breynolds@firstenergycorp.com
+233,Colgate-Palmolive,colgate.com,
+299,"Discover Financial Services",,,,,
+Rank,"Company Name",Domain,,,,
+253,"Estee Lauder",elcompanies.com,
+298,"Auto-Owners Insurance",auto-owners.com,,,,
+299,"NRG Energy",nrg.com,nrg.com,"Anna Altinger",Anna,anna.altinger@nrg.com
+239,Gap,gapinc.com,
+301,"American Family Insurance Group",amfam.com,amfam.com,"Michele Martinez Wingate",Michele,mwingate@amfam.com
+302,Avnet,avnet.com,avnet.com,"Eric Chang",Eric,eric.chang@avnet.com
+303,Freeport-McMoRan,fcx.com,,,,
+304,"Principal Financial Group",principal.com,principal.com,"Laura Tofteland",Laura,tofteland.laura@principal.com
+305,"Consolidated Edison",coned.com,coned.com,"Mark Chapman",Mark,chapmanm@coned.com
+306,"Altria Group",altria.com,altria.com,"Melanie Wu",Melanie,wum@altria.com
+307,Entergy,entergy.com,entergy.com,"Kerry Evans",Kerry,kevans@entergy.com
+308,"Guardian Life Insurance",guardianlife.com,guardianlife.com,"Colleen Tuohy",Colleen,colleentuohy@guardianlife.com
+309,FirstEnergy,firstenergycorp.com,firstenergycorp.com,"Brett Reynolds",Brett,breynolds@firstenergycorp.com
+310,"Jacobs Engineering Group",jacobs.com,jacobs.com,"Andrew Jacobs",Andrew,andrew.jacobs@jacobs.com
+311,BlackRock,blackrock.com,blackrock.com,"Pieter Nelissen",Pieter,pieter.nelissen@blackrock.com
+312,WestRock,westrock.com,westrock.com,"Rachel Gilmore",Rachel,rachel.gilmore@westrock.com
+313,Mastercard,mastercard.com,mastercard.com,"Sasa Mester",Sasa,sasa.mester@mastercard.com
+202,"Mondelez International",mondelezinternational.com,
+213,"Union Pacific",up.com,
+195,"State Street",statestreet.com,
+317,Starbucks,starbucks.com,starbucks.com,"Ritvik Thomas",Ritvik,rthomas@starbucks.com
+283,"American Tower",americantower.com,
+319,"Marriott International",marriott.com,marriott.com,"Laura Golder",Laura,laura.golder@marriott.com
+193,"Tenet Healthcare",tenethealth.com,
+321,CDW,cdw.com,cdw.com,"Jacqueline Macera",Jacqueline,jacqueline.macera@cdw.com
+322,Halliburton,halliburton.com,halliburton.com,"Sean Whitehead",Sean,sean.whitehead@halliburton.com
+323,"Emerson Electric",emerson.com,emerson.com,"Jacalyn High",Jacalyn,jacalyn.high@emerson.com
+235,"State Street",statestreet.com,
+325,"Quanta Services",quantaservices.com,quantaservices.com,"Jose Duarte",Jose,jose.duarte@quantaservices.com
+248,"NextEra Energy",nexteraenergy.com,
+172,"Global Partners",globalp.com,
+328,"CBRE Group",cbre.com,cbre.com,"Leslie Motiwalla",Leslie,leslie.motiwalla@cbre.com
+177,Kimberly-Clark,kimberly-clark.com,
+329,"PayPal Holdings",paypal.com,paypal.com,"Leanne Sheraton",Leanne,lsheraton@paypal.com
+331,"General Mills",generalmills.com,generalmills.com,"Jorge Robles",Jorge,jorge.robles@generalmills.com
+330,"Northrop Grumman",northropgrumman.com,,,,
+333,ViacomCBS,viacomcbs.com,viacomcbs.com,"Carley Cavanaugh",Carley,carley.cavanaugh@viacomcbs.com
+193,Colgate-Palmolive,colgate.com,
+334,PG&E,pge.com,pge.com,"Erika Wasmund",Erika,erika.wasmund@pge.com
+252,"Leidos Holdings",leidos.com,
+258,Danaher,danaher.com,
+314,"NextEra Energy",nexteraenergy.com,
+339,"American Airlines Group",aa.com,aa.com,"Kimberly Robinson",Kimberly,kimberly.robinson@aa.com
+340,Exelon,exeloncorp.com,exeloncorp.com,"Xiying Lin",Xiying,xiying.lin@exeloncorp.com
+341,3M,3m.com,3m.com,"Chitkala Nishandar",Chitkala,cnishandar@3m.com
+223,"Southwest Airlines",southwest.com,
+342,"Capital One Financial",capitalone.com,capitalone.com,"Jesse Karassik",Jesse,jesse.karassik@capitalone.com
+343,"Northwestern Mutual",northwesternmutual.com,northwesternmutual.com,"Lori M Ham",Lori,lori.ham@nm.com
+345,"International Paper",internationalpaper.com,,,,
+216,Kimberly-Clark,kimberly-clark.com,
+194,"State Street",statestreet.com,statestreet.com,"Shylesh Sharma",Shylesh,s.sharma@statestreet.com
+348,ManpowerGroup,manpowergroup.com,manpowergroup.com,"Gareth Vale",Gareth,gareth.vale@manpowergroup.com
+97,"Mondelez International",mondelezinternational.com,
+295,Colgate-Palmolive,colgate.com,
+350,CarMax,carmax.com,carmax.com,"John Crimmins",John,john_crimmins@carmax.com
+352,Chubb,chubb.com,chubb.com,"Tine Thorsen",Tine,tine.thorsen@chubb.com
+353,Amgen,amgen.com,amgen.com,"Martin Zanni",Martin,mzanni@amgen.com
+354,Aramark,aramark.com,aramark.com,"John Kandemir",John,kandemir-john@aramark.com
+355,"Principal Financial Group",principal.com,principal.com,"Laura Tofteland",Laura,tofteland.laura@principal.com
+121,"Southwest Airlines",southwest.com,
+279,Kimberly-Clark,kimberly-clark.com,
+358,Entergy,entergy.com,entergy.com,"Kerry Evans",Kerry,kevans@entergy.com
+359,"Guardian Life Insurance",guardianlife.com,guardianlife.com,"Colleen Tuohy",Colleen,colleentuohy@guardianlife.com
+360,FirstEnergy,firstenergycorp.com,firstenergycorp.com,"Brett Reynolds",Brett,breynolds@firstenergycorp.com
+361,"Jacobs Engineering Group",jacobs.com,jacobs.com,"Andrew Jacobs",Andrew,andrew.jacobs@jacobs.com
+133,"State Street",statestreet.com,
+173,"Discover Financial Services",discover.com,
+362,BlackRock,blackrock.com,blackrock.com,"Pieter Nelissen",Pieter,pieter.nelissen@blackrock.com
+364,Mastercard,mastercard.com,mastercard.com,"Sasa Mester",Sasa,sasa.mester@mastercard.com
+363,WestRock,westrock.com,westrock.com,"Rachel Gilmore",Rachel,rachel.gilmore@westrock.com
+13,AT&T,att.com,
+368,Starbucks,starbucks.com,starbucks.com,"Ritvik Thomas",Ritvik,rthomas@starbucks.com
+291,Amphenol,amphenol.com,
+289,"Southwest Airlines",southwest.com,
+177,Kimberly-Clark,kimberly-clark.com,
+372,PVH,pvh.com,pvh.com,"Anita Koncabahar",Anita,anitakoncabahar@pvh.com
+373,"TravelCenters of America",ta-petro.com,ta-petro.com,"Mel S Anderson",Mel,manderson@ta-petro.com
+288,"Union Pacific",up.com,
+259,"American Electric Power",aep.com,
+375,"NRG Energy",nrg.com,nrg.com,"Anna Altinger",Anna,anna.altinger@nrg.com
+377,"American Family Insurance Group",amfam.com,amfam.com,"Michele Martinez Wingate",Michele,mwingate@amfam.com
+378,Avnet,avnet.com,avnet.com,"Eric Chang",Eric,eric.chang@avnet.com
+379,Freeport-McMoRan,fcx.com,,,,
+380,"Principal Financial Group",principal.com,principal.com,"Laura Tofteland",Laura,tofteland.laura@principal.com
+154,"TravelCenters of America",ta-petro.com,
+381,"Consolidated Edison",coned.com,coned.com,"Mark Chapman",Mark,chapmanm@coned.com
+249,"Global Partners",globalp.com,
+382,"Altria Group",altria.com,altria.com,"Melanie Wu",Melanie,wum@altria.com
+384,"Guardian Life Insurance",guardianlife.com,guardianlife.com,"Colleen Tuohy",Colleen,colleentuohy@guardianlife.com
+385,FirstEnergy,firstenergycorp.com,firstenergycorp.com,"Brett Reynolds",Brett,breynolds@firstenergycorp.com
+387,BlackRock,blackrock.com,blackrock.com,"Pieter Nelissen",Pieter,pieter.nelissen@blackrock.com
+388,WestRock,westrock.com,westrock.com,"Rachel Gilmore",Rachel,rachel.gilmore@westrock.com
+374,"Auto-Owners Insurance",auto-owners.com,,,,
+389,Mastercard,mastercard.com,mastercard.com,"Sasa Mester",Sasa,sasa.mester@mastercard.com
+383,Entergy,entergy.com,entergy.com,"Kerry Evans",Kerry,kevans@entergy.com
+386,"Jacobs Engineering Group",jacobs.com,jacobs.com,"Andrew Jacobs",Andrew,andrew.jacobs@jacobs.com
+393,Starbucks,starbucks.com,starbucks.com,"Ritvik Thomas",Ritvik,rthomas@starbucks.com
+222,"Union Pacific",up.com,
+395,"Marriott International",marriott.com,marriott.com,"Laura Golder",Laura,laura.golder@marriott.com
+351,"American Tower",americantower.com,
+397,CDW,cdw.com,cdw.com,"Jacqueline Macera",Jacqueline,jacqueline.macera@cdw.com
+398,Halliburton,halliburton.com,halliburton.com,"Sean Whitehead",Sean,sean.whitehead@halliburton.com
+399,"Emerson Electric",emerson.com,emerson.com,"Jacalyn High",Jacalyn,jacalyn.high@emerson.com
+365,"NextEra Energy",nexteraenergy.com,
+401,"Quanta Services",quantaservices.com,quantaservices.com,"Jose Duarte",Jose,jose.duarte@quantaservices.com
+206,Fluor,fluor.com,
+283,Gap,gapinc.com,
+404,"CBRE Group",cbre.com,cbre.com,"Leslie Motiwalla",Leslie,leslie.motiwalla@cbre.com
+405,"PayPal Holdings",paypal.com,paypal.com,"Leanne Sheraton",Leanne,lsheraton@paypal.com
+152,"Old Republic International",oldrepublic.com,
+407,"General Mills",generalmills.com,generalmills.com,"Jorge Robles",Jorge,jorge.robles@generalmills.com
+157,"American Electric Power",aep.com,
+409,ViacomCBS,viacomcbs.com,viacomcbs.com,"Carley Cavanaugh",Carley,carley.cavanaugh@viacomcbs.com
+326,Danaher,danaher.com,
+406,"Northrop Grumman",northropgrumman.com,,,,
+189,Amphenol,amphenol.com,
+277,"Leidos Holdings",leidos.com,
+410,PG&E,pge.com,pge.com,"Erika Wasmund",Erika,erika.wasmund@pge.com
+415,"American Airlines Group",aa.com,aa.com,"Kimberly Robinson",Kimberly,kimberly.robinson@aa.com
+416,Exelon,exeloncorp.com,exeloncorp.com,"Xiying Lin",Xiying,xiying.lin@exeloncorp.com
+417,3M,3m.com,3m.com,"Chitkala Nishandar",Chitkala,cnishandar@3m.com
+418,"Capital One Financial",capitalone.com,capitalone.com,"Jesse Karassik",Jesse,jesse.karassik@capitalone.com
+274,"Global Partners",globalp.com,
+419,"Northwestern Mutual",northwesternmutual.com,northwesternmutual.com,"Lori M Ham",Lori,lori.ham@nm.com
+214,"Southwest Airlines",southwest.com,
+421,"International Paper",internationalpaper.com,,,,
+82,Nationwide,nationwide.com,nationwide.com,"Pariss Sloan",Pariss,sloanp@nationwide.com
+424,ManpowerGroup,manpowergroup.com,manpowergroup.com,"Gareth Vale",Gareth,gareth.vale@manpowergroup.com
+151,"Estee Lauder",elcompanies.com,
+426,CarMax,carmax.com,carmax.com,"John Crimmins",John,john_crimmins@carmax.com
+192,Colgate-Palmolive,colgate.com,
+428,Chubb,chubb.com,chubb.com,"Tine Thorsen",Tine,tine.thorsen@chubb.com
+181,Gap,gapinc.com,
+430,Aramark,aramark.com,aramark.com,"John Kandemir",John,kandemir-john@aramark.com
+431,"Principal Financial Group",principal.com,principal.com,"Laura Tofteland",Laura,tofteland.laura@principal.com
+204,Albertsons,albertsonscompanies.com,
+356,"Union Pacific",up.com,
+434,Entergy,entergy.com,entergy.com,"Kerry Evans",Kerry,kevans@entergy.com
+435,"Guardian Life Insurance",guardianlife.com,guardianlife.com,"Colleen Tuohy",Colleen,colleentuohy@guardianlife.com
+436,FirstEnergy,firstenergycorp.com,firstenergycorp.com,"Brett Reynolds",Brett,breynolds@firstenergycorp.com
+429,Amgen,amgen.com,amgen.com,"Martin Zanni",Martin,mzanni@amgen.com
+438,BlackRock,blackrock.com,blackrock.com,"Pieter Nelissen",Pieter,pieter.nelissen@blackrock.com
+439,WestRock,westrock.com,westrock.com,"Rachel Gilmore",Rachel,rachel.gilmore@westrock.com
+440,Mastercard,mastercard.com,mastercard.com,"Sasa Mester",Sasa,sasa.mester@mastercard.com
+437,"Jacobs Engineering Group",jacobs.com,jacobs.com,"Andrew Jacobs",Andrew,andrew.jacobs@jacobs.com
+224,"Discover Financial Services",discover.com,
+175,"Leidos Holdings",leidos.com,
+444,Starbucks,starbucks.com,starbucks.com,"Ritvik Thomas",Ritvik,rthomas@starbucks.com
+250,"Leidos Holdings",leidos.com,
+446,"Estee La",,,,,
+Rank,"Company Name",Domain,,,,
+172,"Global Partners",globalp.com,
+402,Danaher,danaher.com,
+448,PVH,pvh.com,pvh.com,"Anita Koncabahar",Anita,anitakoncabahar@pvh.com
+203,"Philip Morris International",pmiscience.com,
+450,"Auto-Owners Insurance",auto-owners.com,,,,
+451,"NRG Energy",nrg.com,nrg.com,"Anna Altinger",Anna,anna.altinger@nrg.com
+275,"Discover Financial Services",discover.com,
+453,"American Family Insurance Group",amfam.com,amfam.com,"Michele Martinez Wingate",Michele,mwingate@amfam.com
+454,Avnet,avnet.com,avnet.com,"Eric Chang",Eric,eric.chang@avnet.com
+226,"Leidos Holdings",leidos.com,
+455,Freeport-McMoRan,fcx.com,,,,
+456,"Principal Financial Group",principal.com,principal.com,"Laura Tofteland",Laura,tofteland.laura@principal.com
+458,"Altria Group",altria.com,altria.com,"Melanie Wu",Melanie,wum@altria.com
+459,Entergy,entergy.com,entergy.com,"Kerry Evans",Kerry,kevans@entergy.com
+460,"Guardian Life Insurance",guardianlife.com,guardianlife.com,"Colleen Tuohy",Colleen,colleentuohy@guardianlife.com
+195,"Omnicom Group",omnicomgroup.com,
+461,FirstEnergy,firstenergycorp.com,firstenergycorp.com,"Brett Reynolds",Brett,breynolds@firstenergycorp.com
+462,"Jacobs Engineering Group",jacobs.com,jacobs.com,"Andrew Jacobs",Andrew,andrew.jacobs@jacobs.com
+463,BlackRock,blackrock.com,blackrock.com,"Pieter Nelissen",Pieter,pieter.nelissen@blackrock.com
+464,WestRock,westrock.com,westrock.com,"Rachel Gilmore",Rachel,rachel.gilmore@westrock.com
+465,Mastercard,mastercard.com,mastercard.com,"Sasa Mester",Sasa,sasa.mester@mastercard.com
+457,"Consolidated Edison",coned.com,coned.com,"Mark Chapman",Mark,chapmanm@coned.com
+201,"Mondelez International",mondelezinternational.com,
+469,Starbucks,starbucks.com,starbucks.com,"Ritvik Thomas",Ritvik,rthomas@starbucks.com
+403,"DXC Technology",dxc.technology,
+471,"Marriott International",marriott.com,marriott.com,"Laura Golder",Laura,laura.golder@marriott.com
+336,"Tenet Healthcare",tenethealth.com,
+473,CDW,cdw.com,cdw.com,"Jacqueline Macera",Jacqueline,jacqueline.macera@cdw.com
+248,"Discover Financial Services",discover.com,
+475,"Emerson Electric",emerson.com,emerson.com,"Jacalyn High",Jacalyn,jacalyn.high@emerson.com
+252,Kimberly-Clark,kimberly-clark.com,
+477,"Quanta Services",quantaservices.com,quantaservices.com,"Jose Duarte",Jose,jose.duarte@quantaservices.com
+474,Halliburton,halliburton.com,halliburton.com,"Sean Whitehead",Sean,sean.whitehead@halliburton.com
+264,Amphenol,amphenol.com,
+480,"CBRE Group",cbre.com,cbre.com,"Leslie Motiwalla",Leslie,leslie.motiwalla@cbre.com
+481,"PayPal Holdings",paypal.com,paypal.com,"Leanne Sheraton",Leanne,lsheraton@paypal.com
+482,"Northrop Grumman",northropgrumman.com,,,,
+228,"Old Republic International",oldrepublic.com,
+483,"General Mills",generalmills.com,generalmills.com,"Jorge Robles",Jorge,jorge.robles@generalmills.com
+485,ViacomCBS,viacomcbs.com,viacomcbs.com,"Carley Cavanaugh",Carley,carley.cavanaugh@viacomcbs.com
+486,PG&E,pge.com,pge.com,"Erika Wasmund",Erika,erika.wasmund@pge.com
+281,Fluor,fluor.com,
+259,"DXC Technology",dxc.technology,
+427,"American Tower",americantower.com,
+256,"TravelCenters of America",ta-petro.com,
+491,"American Airlines Group",aa.com,aa.com,"Kimberly Robinson",Kimberly,kimberly.robinson@aa.com
+492,Exelon,exeloncorp.com,exeloncorp.com,"Xiying Lin",Xiying,xiying.lin@exeloncorp.com
+493,3M,3m.com,3m.com,"Chitkala Nishandar",Chitkala,cnishandar@3m.com
+494,"Capital One Financial",capitalone.com,capitalone.com,"Jesse Karassik",Jesse,jesse.karassik@capitalone.com
+495,"Northwestern Mutual",northwesternmutual.com,northwesternmutual.com,"Lori M Ham",Lori,lori.ham@nm.com
+466,"NextEra Energy",nexteraenergy.com,
+497,"International Paper",internationalpaper.com,,,,
+227,"Estee Lauder",elcompanies.com,
+267,Colgate-Palmolive,colgate.com,
+500,ManpowerGroup,manpowergroup.com,manpowergroup.com,"Gareth Vale",Gareth,gareth.vale@manpowergroup.com
+432,"Union Pacific",up.com,
+297,"Ally Financial",ally.com,ally.com,"Abdul Rahman Farooqui",Abdul,abdul.rahman@ally.com
+270,"Omnicom Group",omnicomgroup.com,
+279,Albertsons,albertsonscompanies.com,
+250,"Discover Financial Services",discover.com,
+320,Kimberly-Clark,kimberly-clark.com,
+337,"State Street",statestreet.com,statestreet.com,"Shylesh Sharma",Shylesh,s.sharma@statestreet.com
+268,"Tenet Healthcare",tenethealth.com,
+478,Danaher,danaher.com,
+412,"Tenet Healthcare",tenethealth.com,
+315,"Global Partners",globalp.com,
+233,"American Electric Power",aep.com,
+347,Albertsons,albertsonscompanies.com,
+316,"Discover Financial Services",discover.com,
+256,Gap,gapinc.com,
+276,"Mondelez International",mondelezinternational.com,
+327,"DXC Technology",dxc.technology,
+300,"American Electric Power",aep.com,
+338,"Omnicom Group",omnicomgroup.com,
+479,"DXC Technology",dxc.technology,
+269,"State Street",statestreet.com,
+349,Fluor,fluor.com,
+278,"Philip Morris International",pmiscience.com,
+247,"Global Partners",globalp.com,
+222,"NextEra Energy",nexteraenergy.com,
+298,"Global Partners",globalp.com,
+324,Gap,gapinc.com,
+396,Kimberly-Clark,kimberly-clark.com,
+332,Amphenol,amphenol.com,amphenol.com,"Mick Albayati",Mick,malbayati@amphenol.com
+433,"Southwest Airlines",southwest.com,
+344,"Mondelez International",mondelezinternational.com,
+400,Gap,gapinc.com,
+370,"Estee Lauder",elcompanies.com,
+369,"Leidos Holdings",leidos.com,
+443,"Discover Financial Services",discover.com,discover.com,"Colleen Delaney",Colleen,colleendelaney@discover.com
+423,Albertsons,albertsonscompanies.com,
+425,Fluor,fluor.com,
+367,"Discover Financial Services",discover.com,
+390,"NextEra Energy",nexteraenergy.com,
+392,"Discover Financial Services",discover.com,
+414,"Omnicom Group",omnicomgroup.com,
+335,Colgate-Palmolive,colgate.com,
+376,"American Electric Power",aep.com,
+441,"NextEra Energy",nexteraenergy.com,
+391,"Global Partners",globalp.com,
+408,Amphenol,amphenol.com,
+420,"Mondelez International",mondelezinternational.com,
+422,"Philip Morris International",pmiscience.com,
+468,"Discover Financial Services",discover.com,
+357,"Southwest Airlines",southwest.com,
+446,"Estee Lauder",elcompanies.com,
+488,"Tenet Healthcare",tenethealth.com,
+223,"Global Partners",globalp.com,
+499,Albertsons,albertsonscompanies.com,
+467,"Global Partners",globalp.com,
+470,"Leidos Holdings",leidos.com,
+489,"State Street",statestreet.com,
+36,"Johnson & Johnson",jnj.com,
+442,"Global Partners",globalp.com,
+366,"Global Partners",globalp.com,
+484,Amphenol,amphenol.com,
+496,"Mondelez International",mondelezinternational.com,
+297,"NextEra Energy",nexteraenergy.com,
+452,"American Electric Power",aep.com,
+498,"Philip Morris International",pmiscience.com,
+394,"Leidos Holdings",leidos.com,
+476,Gap,gapinc.com,
+487,Colgate-Palmolive,colgate.com,
+371,"Old Republic International",oldrepublic.com,
+447,"Old Republic International",oldrepublic.com,
+449,"TravelCenters of America",ta-petro.com,
+413,"State Street",statestreet.com,
+346,"Philip Morris International",pmiscience.com,
+445,"Leidos Holdings",leidos.com,
+490,"Omnicom Group",omnicomgroup.com,
+472,Kimberly-Clark,kimberly-clark.com,
+318,"Leidos Holdings",leidos.com,
+411,Colgate-Palmolive,colgate.com,
+88,McDonald's,mcdonalds.com,

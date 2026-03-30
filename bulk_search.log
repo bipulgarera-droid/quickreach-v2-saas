@@ -1,0 +1,210 @@
+2026-03-23 09:46:22,188 - INFO - Starting BULK business search: production house in Mumbai
+2026-03-23 09:46:22,514 - INFO - Generated 49 query variants for 'production house' in 'Mumbai'
+2026-03-23 09:46:23,523 - INFO - HTTP Request: GET https://rbkrtmzqubwrvkrvcebr.supabase.co/rest/v1/search_runs?select=query&project_id=eq.f86110df-9578-4cd5-be4d-a88ac678e860&status=eq.completed "HTTP/2 200 OK"
+2026-03-23 09:46:23,523 - INFO - Found 0 already completed queries for this project. They will be skipped.
+2026-03-23 09:46:23,523 - INFO - --- Processing Query 1/49: 'production house Mumbai' ---
+2026-03-23 09:46:23,523 - INFO - Searching: 'production house Mumbai' (page 1/10)
+2026-03-23 09:46:24,684 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:24,686 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:25,690 - INFO - --- Processing Query 2/49: 'production house company Mumbai' ---
+2026-03-23 09:46:25,690 - INFO - Searching: 'production house company Mumbai' (page 1/10)
+2026-03-23 09:46:26,567 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:26,569 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:27,574 - INFO - --- Processing Query 3/49: 'production house companies Mumbai' ---
+2026-03-23 09:46:27,574 - INFO - Searching: 'production house companies Mumbai' (page 1/10)
+2026-03-23 09:46:28,636 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:28,639 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:29,641 - INFO - --- Processing Query 4/49: 'production house agency Mumbai' ---
+2026-03-23 09:46:29,642 - INFO - Searching: 'production house agency Mumbai' (page 1/10)
+2026-03-23 09:46:30,947 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:30,949 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:31,954 - INFO - --- Processing Query 5/49: 'production house agencies Mumbai' ---
+2026-03-23 09:46:31,955 - INFO - Searching: 'production house agencies Mumbai' (page 1/10)
+2026-03-23 09:46:32,696 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:32,699 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:33,703 - INFO - --- Processing Query 6/49: 'production house firm Mumbai' ---
+2026-03-23 09:46:33,703 - INFO - Searching: 'production house firm Mumbai' (page 1/10)
+2026-03-23 09:46:34,406 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:34,408 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:35,413 - INFO - --- Processing Query 7/49: 'production house firms Mumbai' ---
+2026-03-23 09:46:35,413 - INFO - Searching: 'production house firms Mumbai' (page 1/10)
+2026-03-23 09:46:35,985 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:35,987 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:36,992 - INFO - --- Processing Query 8/49: 'production house studio Mumbai' ---
+2026-03-23 09:46:36,993 - INFO - Searching: 'production house studio Mumbai' (page 1/10)
+2026-03-23 09:46:37,730 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:37,732 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:38,737 - INFO - --- Processing Query 9/49: 'production house studios Mumbai' ---
+2026-03-23 09:46:38,737 - INFO - Searching: 'production house studios Mumbai' (page 1/10)
+2026-03-23 09:46:39,527 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:39,531 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:40,536 - INFO - --- Processing Query 10/49: 'production house business Mumbai' ---
+2026-03-23 09:46:40,537 - INFO - Searching: 'production house business Mumbai' (page 1/10)
+2026-03-23 09:46:41,054 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:41,058 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:42,063 - INFO - --- Processing Query 11/49: 'production house businesses Mumbai' ---
+2026-03-23 09:46:42,063 - INFO - Searching: 'production house businesses Mumbai' (page 1/10)
+2026-03-23 09:46:42,825 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:42,826 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:43,832 - INFO - --- Processing Query 12/49: 'production house group Mumbai' ---
+2026-03-23 09:46:43,832 - INFO - Searching: 'production house group Mumbai' (page 1/10)
+2026-03-23 09:46:44,589 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:44,591 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:45,594 - INFO - --- Processing Query 13/49: 'production house services Mumbai' ---
+2026-03-23 09:46:45,594 - INFO - Searching: 'production house services Mumbai' (page 1/10)
+2026-03-23 09:46:46,383 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:46,387 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:47,393 - INFO - --- Processing Query 14/49: 'best production house Mumbai' ---
+2026-03-23 09:46:47,393 - INFO - Searching: 'best production house Mumbai' (page 1/10)
+2026-03-23 09:46:47,683 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:47,684 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:48,686 - INFO - --- Processing Query 15/49: 'top production house Mumbai' ---
+2026-03-23 09:46:48,686 - INFO - Searching: 'top production house Mumbai' (page 1/10)
+2026-03-23 09:46:49,456 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:49,458 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:50,462 - INFO - --- Processing Query 16/49: 'leading production house Mumbai' ---
+2026-03-23 09:46:50,462 - INFO - Searching: 'leading production house Mumbai' (page 1/10)
+2026-03-23 09:46:50,797 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:50,798 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:51,802 - INFO - --- Processing Query 17/49: 'local production house Mumbai' ---
+2026-03-23 09:46:51,803 - INFO - Searching: 'local production house Mumbai' (page 1/10)
+2026-03-23 09:46:52,534 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:52,538 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:53,543 - INFO - --- Processing Query 18/49: 'production house in Mumbai' ---
+2026-03-23 09:46:53,544 - INFO - Searching: 'production house in Mumbai' (page 1/10)
+2026-03-23 09:46:54,337 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:54,341 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:55,341 - INFO - --- Processing Query 19/49: 'list of production house in Mumbai' ---
+2026-03-23 09:46:55,341 - INFO - Searching: 'list of production house in Mumbai' (page 1/10)
+2026-03-23 09:46:56,057 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:56,059 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:57,059 - INFO - --- Processing Query 20/49: 'directory of production house in Mumbai' ---
+2026-03-23 09:46:57,060 - INFO - Searching: 'directory of production house in Mumbai' (page 1/10)
+2026-03-23 09:46:57,796 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:57,798 - INFO - Waiting 1 second before next query...
+2026-03-23 09:46:58,804 - INFO - --- Processing Query 21/49: 'production house office Mumbai' ---
+2026-03-23 09:46:58,805 - INFO - Searching: 'production house office Mumbai' (page 1/10)
+2026-03-23 09:46:59,820 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:46:59,823 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:00,825 - INFO - --- Processing Query 22/49: 'production house headquarters Mumbai' ---
+2026-03-23 09:47:00,825 - INFO - Searching: 'production house headquarters Mumbai' (page 1/10)
+2026-03-23 09:47:01,167 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:01,169 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:02,171 - INFO - --- Processing Query 23/49: 'production house contact Mumbai' ---
+2026-03-23 09:47:02,172 - INFO - Searching: 'production house contact Mumbai' (page 1/10)
+2026-03-23 09:47:02,897 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:02,900 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:03,904 - INFO - --- Processing Query 24/49: 'production house team Mumbai' ---
+2026-03-23 09:47:03,904 - INFO - Searching: 'production house team Mumbai' (page 1/10)
+2026-03-23 09:47:04,660 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:04,661 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:05,666 - INFO - --- Processing Query 25/49: 'production house portfolio Mumbai' ---
+2026-03-23 09:47:05,666 - INFO - Searching: 'production house portfolio Mumbai' (page 1/10)
+2026-03-23 09:47:06,364 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:06,366 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:07,368 - INFO - --- Processing Query 26/49: 'production house projects Mumbai' ---
+2026-03-23 09:47:07,368 - INFO - Searching: 'production house projects Mumbai' (page 1/10)
+2026-03-23 09:47:08,600 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:08,603 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:09,608 - INFO - --- Processing Query 27/49: 'production house works Mumbai' ---
+2026-03-23 09:47:09,608 - INFO - Searching: 'production house works Mumbai' (page 1/10)
+2026-03-23 09:47:10,379 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:10,383 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:11,388 - INFO - --- Processing Query 28/49: 'independent production house Mumbai' ---
+2026-03-23 09:47:11,389 - INFO - Searching: 'independent production house Mumbai' (page 1/10)
+2026-03-23 09:47:12,113 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:12,116 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:13,120 - INFO - --- Processing Query 29/49: 'boutique production house Mumbai' ---
+2026-03-23 09:47:13,121 - INFO - Searching: 'boutique production house Mumbai' (page 1/10)
+2026-03-23 09:47:13,404 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:13,405 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:14,410 - INFO - --- Processing Query 30/49: 'creative production house Mumbai' ---
+2026-03-23 09:47:14,410 - INFO - Searching: 'creative production house Mumbai' (page 1/10)
+2026-03-23 09:47:14,730 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:14,733 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:15,737 - INFO - --- Processing Query 31/49: 'professional production house Mumbai' ---
+2026-03-23 09:47:15,737 - INFO - Searching: 'professional production house Mumbai' (page 1/10)
+2026-03-23 09:47:16,443 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:16,444 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:17,449 - INFO - --- Processing Query 32/49: 'award winning production house Mumbai' ---
+2026-03-23 09:47:17,450 - INFO - Searching: 'award winning production house Mumbai' (page 1/10)
+2026-03-23 09:47:17,782 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:17,783 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:18,789 - INFO - --- Processing Query 33/49: 'full service production house Mumbai' ---
+2026-03-23 09:47:18,789 - INFO - Searching: 'full service production house Mumbai' (page 1/10)
+2026-03-23 09:47:19,127 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:19,128 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:20,130 - INFO - --- Processing Query 34/49: 'specialized production house Mumbai' ---
+2026-03-23 09:47:20,131 - INFO - Searching: 'specialized production house Mumbai' (page 1/10)
+2026-03-23 09:47:20,459 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:20,462 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:21,465 - INFO - --- Processing Query 35/49: 'certified production house Mumbai' ---
+2026-03-23 09:47:21,465 - INFO - Searching: 'certified production house Mumbai' (page 1/10)
+2026-03-23 09:47:22,287 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:22,289 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:23,293 - INFO - --- Processing Query 36/49: '"production house" AND "Mumbai"' ---
+2026-03-23 09:47:23,293 - INFO - Searching: '"production house" AND "Mumbai"' (page 1/10)
+2026-03-23 09:47:24,390 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:24,391 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:25,393 - INFO - --- Processing Query 37/49: '"production house" Mumbai -directory -list' ---
+2026-03-23 09:47:25,393 - INFO - Searching: '"production house" Mumbai -directory -list' (page 1/10)
+2026-03-23 09:47:25,706 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:25,709 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:26,713 - INFO - --- Processing Query 38/49: '"production house" Mumbai "contact us"' ---
+2026-03-23 09:47:26,713 - INFO - Searching: '"production house" Mumbai "contact us"' (page 1/10)
+2026-03-23 09:47:27,510 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:27,513 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:28,515 - INFO - --- Processing Query 39/49: '"production house" Mumbai "about us"' ---
+2026-03-23 09:47:28,515 - INFO - Searching: '"production house" Mumbai "about us"' (page 1/10)
+2026-03-23 09:47:28,857 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:28,858 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:29,863 - INFO - --- Processing Query 40/49: '"production house" Mumbai "our team"' ---
+2026-03-23 09:47:29,863 - INFO - Searching: '"production house" Mumbai "our team"' (page 1/10)
+2026-03-23 09:47:30,550 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:30,553 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:31,554 - INFO - --- Processing Query 41/49: '"production house" Mumbai "clients"' ---
+2026-03-23 09:47:31,554 - INFO - Searching: '"production house" Mumbai "clients"' (page 1/10)
+2026-03-23 09:47:32,295 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:32,296 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:33,301 - INFO - --- Processing Query 42/49: 'site:.com "production house" Mumbai' ---
+2026-03-23 09:47:33,302 - INFO - Searching: 'site:.com "production house" Mumbai' (page 1/10)
+2026-03-23 09:47:33,588 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:33,590 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:34,595 - INFO - --- Processing Query 43/49: 'site:.in "production house" Mumbai' ---
+2026-03-23 09:47:34,596 - INFO - Searching: 'site:.in "production house" Mumbai' (page 1/10)
+2026-03-23 09:47:34,986 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:34,990 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:35,995 - INFO - --- Processing Query 44/49: 'site:.co.in "production house" Mumbai' ---
+2026-03-23 09:47:35,995 - INFO - Searching: 'site:.co.in "production house" Mumbai' (page 1/10)
+2026-03-23 09:47:36,323 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:36,324 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:37,327 - INFO - --- Processing Query 45/49: 'site:.net "production house" Mumbai' ---
+2026-03-23 09:47:37,327 - INFO - Searching: 'site:.net "production house" Mumbai' (page 1/10)
+2026-03-23 09:47:38,051 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:38,055 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:39,060 - INFO - --- Processing Query 46/49: 'site:.org "production house" Mumbai' ---
+2026-03-23 09:47:39,061 - INFO - Searching: 'site:.org "production house" Mumbai' (page 1/10)
+2026-03-23 09:47:39,877 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:39,881 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:40,886 - INFO - --- Processing Query 47/49: 'production house near Mumbai' ---
+2026-03-23 09:47:40,886 - INFO - Searching: 'production house near Mumbai' (page 1/10)
+2026-03-23 09:47:41,193 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:41,197 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:42,197 - INFO - --- Processing Query 48/49: 'production house around Mumbai' ---
+2026-03-23 09:47:42,197 - INFO - Searching: 'production house around Mumbai' (page 1/10)
+2026-03-23 09:47:42,513 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:42,514 - INFO - Waiting 1 second before next query...
+2026-03-23 09:47:43,519 - INFO - --- Processing Query 49/49: '"production house" Mumbai OR Bombay' ---
+2026-03-23 09:47:43,520 - INFO - Searching: '"production house" Mumbai OR Bombay' (page 1/10)
+2026-03-23 09:47:43,805 - ERROR - Serper API error (400): {"message":"Not enough credits","statusCode":400}
+2026-03-23 09:47:43,807 - INFO - Waiting 1 second before next query...
+
+========================================
+FINAL BULK SEARCH RESULTS
+========================================
+{
+  "inserted": 0,
+  "skipped": 0,
+  "errors": 0
+}
+========================================

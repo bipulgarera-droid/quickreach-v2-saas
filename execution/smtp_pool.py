@@ -218,6 +218,13 @@ class SMTPPool:
         ]
         return sum(a.max_per_day for a in usable_accounts)
 
+    def get_account_by_email(self, email: str) -> Optional[GmailAccount]:
+        """Find a specific account in the pool by its email address."""
+        for a in self.accounts:
+            if a.email.lower() == email.lower():
+                return a
+        return None
+
     def get_next_account(self, sender_group: str = "all") -> Optional[GmailAccount]:
         """Get the next available account via round-robin, filtered by sender_group."""
         # Find accounts that either belong to the requested group OR if group is 'all', use all accounts.
@@ -241,7 +248,7 @@ class SMTPPool:
             checked += 1
         return None  # all usable accounts exhausted
 
-    def send_email(self, account: GmailAccount, to_addr: str, subject: str, body_html: str, dry_run: bool = False, delay_min: Optional[int] = None, delay_max: Optional[int] = None, sender_name: Optional[str] = None) -> dict:
+    def send_email(self, account: GmailAccount, to_addr: str, subject: str, body_html: str, dry_run: bool = False, delay_min: Optional[int] = None, delay_max: Optional[int] = None, sender_name: Optional[str] = None, thread_id: Optional[str] = None) -> dict:
         """Send an HTML email via SMTP from the given account.
         
         Enforces a global inter-send delay shared across all concurrent threads,
@@ -290,9 +297,13 @@ class SMTPPool:
                 raw_msg = base64.urlsafe_b64encode(msg.as_bytes()).decode()
 
                 try:
+                    send_body = {'raw': raw_msg}
+                    if thread_id:
+                        send_body['threadId'] = thread_id
+                        
                     account.service.users().messages().send(
                         userId='me', 
-                        body={'raw': raw_msg}
+                        body=send_body
                     ).execute()
                 except Exception as e:
                     error_msg = f"Gmail API error for {account.email}: {e}"

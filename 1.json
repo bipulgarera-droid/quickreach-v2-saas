@@ -1,0 +1,1941 @@
+{
+  "name": "Skool | Qualify + Enrichment",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "df4ee13b-44da-4748-9e3b-5f8a027ef954",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -3820,
+        -40
+      ],
+      "id": "055240ea-a651-4e6c-9fc9-fa3555017820",
+      "name": "Webhook",
+      "webhookId": "df4ee13b-44da-4748-9e3b-5f8a027ef954",
+      "notes": "const inputData = input.config()\nconst { recordId } = inputData;\nconst response = await fetch(\"YOUR PRODUCTION URL\"+\"?recordId=\"+recordId)\nconsole.log(response.status)"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  mergedData: items.map(item => item.json.url) // Extract only the URLs, removing unnecessary objects\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        -360
+      ],
+      "id": "e963dc11-aabb-49bd-a46e-b8615d59f087",
+      "name": "Turn X Items Into 1"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are given a **list of URLs extracted from a company’s website**. Your task is to **identify and categorize the most relevant URLs** to help enrich lead data.  \n\nEach URL should be classified into **one of four key categories** that provide meaningful insights into the company’s operations. If a category **does not have a matching URL**, return `\"no relevant URL\"` instead.  \n\n## **Selection Criteria & Context**  \n\n### **1. Company & Mission (About the Business & People Behind It)**  \n- **Purpose:** Find a page that explains **who the company is, what they stand for, and who runs it**.  \n- **Look for:** Company history, mission, vision, leadership, team, and core values.  \n- **Example matches:**  \n  - `/about`, `/company`, `/who-we-are`, `/our-story`, `/overview`, `/leadership`, `/team`, `/mission`, `/vision`  \n- **Avoid:** Generic pages like `/home`, contact pages, and customer support sections.  \n\n### **2. Offerings & Positioning (What They Sell & Their Market Fit)**  \n- **Purpose:** Identify a page that describes the company’s **products, services, industries served, or unique differentiators**.  \n- **Look for:** Offerings, solutions, industry focus, and use cases.  \n- **Example matches:**  \n  - `/services`, `/what-we-do`, `/solutions`, `/products`, `/industries`, `/use-cases`, `/capabilities`  \n- **Avoid:** Pages that **only mention** clients but do not describe the company’s services.  \n\n### **3. Process & Differentiation (How They Deliver Value)**  \n- **Purpose:** Identify a page that explains **how** the company operates and what makes them unique.  \n- **Look for:** Methodologies, workflows, onboarding process, value proposition, or unique technology/frameworks.  \n- **Example matches:**  \n  - `/how-it-works`, `/our-process`, `/methodology`, `/why-us`, `/why-choose-us`, `/approach`  \n- **Avoid:** Basic service descriptions without any details on processes or methodologies.  \n\n### **4. Proof of Success (Social Proof & Track Record)**  \n- **Purpose:** Find a page that demonstrates **the company’s credibility through client results, testimonials, or case studies**.  \n- **Look for:** Success stories, partnerships, and testimonials.  \n- **Example matches:**  \n  - `/case-studies`, `/testimonials`, `/success-stories`, `/clients`, `/portfolio`  \n- **Avoid:** Generic client lists that do not contain results or success metrics.  \n\n## **Output Requirements**  \n- **Return exactly one URL per category** (or `\"no relevant URL\"` if none exist).  \n- **Output must be in JSON format** as shown below.  \n- **Only return the path (e.g., `/about` instead of `https://example.com/about`).**  \n- **Strictly follow the structured format—no extra explanations or additional text.**  \n\n### **Expected Output Format**  \n```json\n{\n  \"selected_urls\": {\n    \"company_mission\": \"/about\",\n    \"offerings_positioning\": \"/solutions\",\n    \"process_differentiation\": \"/our-process\",\n    \"proof_of_success\": \"no relevant URL\"\n  }\n}\n```\n\n## **Additional Guidelines**  \n- **Prioritize broader coverage:** If multiple URLs match a category, choose the **most comprehensive one** (e.g., `/about` over `/company-overview`).  \n- **Handle duplicates:** If a URL appears more than once, select only one.  \n- **Exclude irrelevant pages:** Ignore contact pages, blog articles, FAQs, legal pages, or careers pages.  \n- **Do NOT infer missing information:** If no clear match exists, return `\"no relevant URL\"`.  "
+            },
+            {
+              "content": "={{ $json.mergedData }}\n"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        980,
+        -360
+      ],
+      "id": "478779c5-be6b-4efc-82c2-e31815247140",
+      "name": "Determine Valuable URLs",
+      "credentials": {
+        "openAiApi": {
+          "id": "b2kOBJyl5u4VWa5e",
+          "name": "Clarence | OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "message.content.selected_urls",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        -360
+      ],
+      "id": "db4b87aa-5666-47fa-ac9b-6ca3d66100f8",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "url": "={{(() => {\n  const website = $('Pull Lead From Airtable').first().json['Company Website'];\n  const email = $('Pull Lead From Airtable').first().json['Email Address'];\n  // If 'Company Website' is empty, derive from 'Email Address'\n  return website || `https://${email.split('@')[1]}`;\n})()}}{{ $json['message.content.selected_urls'] === 'no relevant url' ? '' : $json['message.content.selected_urls'] }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1560,
+        -360
+      ],
+      "id": "7cce56e1-e7f1-4ed0-a450-17ada6b17006",
+      "name": "HTTP Request",
+      "alwaysOutputData": false,
+      "onError": "continueRegularOutput",
+      "notes": "{{ $('Pull Lead From Airtable,').first().json['Company Website'] }}{{ $json['message.content.selected_urls'] }}"
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {
+              "fieldToAggregate": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1780,
+        -360
+      ],
+      "id": "e5edcbb4-3373-4401-a66e-678bbd67397a",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const htmlContent = $node[\"Company Homepage Scraper\"].json[\"data\"]; // Replace this with the field containing your HTML content\n\n// Function to strip HTML tags and clean the text\nconst extractPlainText = (html) => {\n    if (!html) return \"\";\n\n    // Remove script and style tags along with their content\n    const withoutScriptsAndStyles = html.replace(/<script[\\s\\S]*?>[\\s\\S]*?<\\/script>/gi, \"\")\n                                        .replace(/<style[\\s\\S]*?>[\\s\\S]*?<\\/style>/gi, \"\");\n\n    // Remove all remaining HTML tags\n    const strippedText = withoutScriptsAndStyles.replace(/<\\/?[^>]+(>|$)/g, \"\");\n\n    // Replace HTML entities with their plain-text equivalents\n    const decodedText = strippedText.replace(/&nbsp;/gi, \" \")\n                                    .replace(/&amp;/gi, \"&\")\n                                    .replace(/&lt;/gi, \"<\")\n                                    .replace(/&gt;/gi, \">\")\n                                    .replace(/&quot;/gi, \"\\\"\")\n                                    .replace(/&#39;/gi, \"'\");\n\n    // Replace multiple spaces, tabs, and newlines with a single space\n    const cleanedText = decodedText.replace(/\\s+/g, \" \").trim();\n\n    return cleanedText;\n};\n\n// Call the function to process the HTML content\nconst plainText = extractPlainText(htmlContent);\n\n// Return the plain text as the output of this node\nreturn {\n    plainText: plainText,\n};"
+      },
+      "id": "743dfb7a-bd86-4dc2-8d6b-5c1e46616b75",
+      "name": "Remove HTML Homepage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -100,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst cleanText = (html) => {\n    return html\n        .replace(/<script[\\s\\S]*?>[\\s\\S]*?<\\/script>/gi, '')  // Remove scripts\n        .replace(/<style[\\s\\S]*?>[\\s\\S]*?<\\/style>/gi, '')    // Remove styles\n        .replace(/<!--[\\s\\S]*?-->/g, '')                     // Remove comments\n        .replace(/<\\/?[^>]+(>|$)/g, '')                      // Remove HTML tags\n        .replace(/&nbsp;/gi, \" \")                           // Decode HTML entities\n        .replace(/&amp;/gi, \"&\")\n        .replace(/&lt;/gi, \"<\")\n        .replace(/&gt;/gi, \">\")\n        .replace(/&quot;/gi, \"\\\"\")\n        .replace(/&#39;/gi, \"'\")\n        .replace(/\\s+/g, ' ')                                // Normalize whitespace\n        .trim();\n};\n\nconst updatedItems = items.map((item) => {\n    const data = item.json.data.map(cleanText);\n    return { ...item.json, data };\n});\n\nreturn updatedItems;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        -360
+      ],
+      "id": "a9834d0f-570a-41ec-81a2-bfc2e9f3045b",
+      "name": "Remove HTML Webpages"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=**Prompt:**  \n\nAnalyze the following company data and extract **only verifiable information** from the text. The output should be written as a **cohesive business overview** without unnecessary repetition or conclusions. **Do not fabricate or infer missing details**—only include what is explicitly stated.  \n\nThe analysis should cover:  \n\n1. **Company History & Founders** – Who founded it, when (if stated), and any background on why it was established.  \n2. **Mission Statement & Core Values** – The company’s core purpose, guiding principles, and approach to business.  \n3. **Vision Statement & Future Goals** – Any stated long-term objectives or future aspirations.  \n4. **Industries Served & Target Audience** – Broad industry classification and specific client types served.  \n5. **Services & Specialties** – The exact services offered and any notable areas of specialization.  \n6. **Company Achievements & Recognition** – Any awards, recognitions, partnerships, or milestones mentioned.  \n\n**Output Format:**  \n\nWrite the response as a **well-structured business overview** in clear paragraphs. **Do not include bullet points, lists, or conclusions.** Keep the tone **neutral, factual, and concise** while ensuring clarity. If specific details (e.g., founding year, awards) are not mentioned, **state that they are not provided** instead of assuming.  \n\n### **Additional Instruction:**  \nFor any detail that is not explicitly provided in the text, simply state \"Not mentioned in the text.\" Do not add extra commentary, qualifiers like \"However,\" or any inferred information. Keep your response strictly factual and concise.",
+              "role": "system"
+            },
+            {
+              "content": "=Input: {{ $json.finalText }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        740,
+        -120
+      ],
+      "id": "3630863f-4969-4f11-9932-df881c028fb1",
+      "name": "Analyze Company/Mission",
+      "credentials": {
+        "openAiApi": {
+          "id": "b2kOBJyl5u4VWa5e",
+          "name": "Clarence | OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=### **Prompt:**  \n\nAnalyze the following company data and extract **only verifiable information** from the text. The output should be written as a **cohesive business overview** without unnecessary repetition or conclusions. **Do not fabricate or infer missing details**—only include what is explicitly stated.  \n\nThe analysis should cover:  \n\n1. **Core Products & Services** – The exact products or services the company offers, how they function, and their benefits to customers.  \n2. **Feature Lists & Differentiators** – What makes the company’s offerings unique compared to competitors (e.g., superior technology, customization, industry expertise).  \n3. **Pricing Models** – If mentioned, describe the company's pricing approach (e.g., subscription-based, enterprise-level, one-time fee). If pricing is not provided, state that it is not mentioned.  \n4. **Industries Served** – A more detailed look at niche verticals or specialized markets the company caters to.  \n5. **Use Cases & Applications** – Real-world applications of the company’s solutions, who benefits from them, and how they solve specific problems.  \n6. **Target Customers** – Whether the company serves SMBs, enterprises, B2B, B2C, or a specific customer segment.  \n7. **Service & Support Approach** – If mentioned, describe how the company supports its customers (e.g., dedicated account management, 24/7 support, implementation services).  \n8. **Geographical Reach** – If applicable, mention whether the company operates locally, nationally, or globally.  \n\n### **Output Format:**  \nWrite the response as a **well-structured business overview** in clear paragraphs. **Do not use bullet points, lists, or conclusions.** Keep the tone **neutral, factual, and concise** while ensuring clarity. If specific details (e.g., pricing, support) are not mentioned, **state that they are not provided** instead of assuming.  \n\n### **Additional Instruction:**  \nFor any detail that is not explicitly provided in the text, simply state \"Not mentioned in the text.\" Do not add extra commentary, qualifiers like \"However,\" or any inferred information. Keep your response strictly factual and concise.",
+              "role": "system"
+            },
+            {
+              "content": "=Input: {{ $json.finalText }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        1300,
+        -120
+      ],
+      "id": "f4fc6ce9-beaa-4340-92af-48a1f15fd1ce",
+      "name": "Analyze Offerings & Positioning",
+      "credentials": {
+        "openAiApi": {
+          "id": "b2kOBJyl5u4VWa5e",
+          "name": "Clarence | OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=### **Prompt:**  \n\nAnalyze the following company data and extract **only verifiable information** from the text. The output should be written as a **cohesive business overview** without unnecessary repetition or conclusions. **Do not fabricate or infer missing details**—only include what is explicitly stated.  \n\nThe analysis should cover:  \n\n1. **Company Methodology** – How the company delivers its services (e.g., agile, data-driven, consultative, customer-centric). If specific methodologies or approaches are mentioned, describe them.  \n2. **Step-by-Step Process** – If outlined, explain how the company operates from client onboarding to delivering results. Include any structured workflows or frameworks.  \n3. **Proprietary Tech or Frameworks** – Mention any unique models, software, patents, or proprietary methodologies that differentiate the company.  \n4. **Value Proposition** – What makes this company stand out? Identify key selling points compared to competitors, such as efficiency, customization, cost-effectiveness, or expertise.  \n5. **Onboarding Experience** – How the company interacts with new clients, including the initial consultation, setup, or integration process.  \n6. **Key Metrics & Focus Areas** – Identify any performance indicators they highlight, such as cost reduction, ROI, revenue impact, speed, or efficiency.  \n7. **Customer Engagement & Communication** – If mentioned, describe how the company interacts with clients (e.g., regular reporting, dedicated account managers, transparent feedback loops).  \n8. **Scalability & Adaptability** – If relevant, include how the company adapts to different client needs, business sizes, or industries.  \n\n### **Output Format:**  \nWrite the response as a **well-structured business overview** in clear paragraphs. **Do not use bullet points, lists, or conclusions.** Keep the tone **neutral, factual, and concise** while ensuring clarity. If specific details (e.g., proprietary tech, onboarding steps) are not mentioned, **state that they are not provided** instead of assuming.  \n\n### **Additional Instruction:**  \nFor any detail that is not explicitly provided in the text, simply state \"Not mentioned in the text.\" Do not add extra commentary, qualifiers like \"However,\" or any inferred information. Keep your response strictly factual and concise.",
+              "role": "system"
+            },
+            {
+              "content": "=Input: {{ $json.finalText }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        1860,
+        -120
+      ],
+      "id": "4f2fc39f-6c26-418d-ac5c-d60bff021128",
+      "name": "Analyze Process & Differentiation",
+      "credentials": {
+        "openAiApi": {
+          "id": "b2kOBJyl5u4VWa5e",
+          "name": "Clarence | OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=### **Prompt:**  \n\nAnalyze the following company data and extract **only verifiable proof of success** from the text. The output should be written as a **detailed, fact-based summary** without unnecessary repetition, speculation, or conclusions. **Do not fabricate or infer missing details—only include what is explicitly stated.**  \n\nThe analysis should cover:  \n\n1. **Case Studies & Real-World Success** – Extract any case studies, including company names, industries, and specific outcomes achieved. Summarize the challenge, the company’s solution, and the measurable results. If numerical improvements (e.g., increased revenue, cost reduction, hiring efficiency) are provided, include them.  \n2. **Testimonials & Client Feedback** – Identify any direct client quotes, including who provided them (e.g., job title, company). If a testimonial includes specific praise (e.g., speed, expertise, impact), highlight the most compelling details.  \n3. **Notable Clients & Partnerships** – If company names are mentioned, extract them accurately. If industries or company sizes are referenced, include them.  \n4. **Key Results & Metrics** – If quantifiable outcomes are stated (e.g., \"helped hire 500+ executives,\" \"reduced time-to-hire by 40%\"), extract these with precise figures.  \n5. **Awards & Recognition** – If industry awards, certifications, or high-profile partnerships are mentioned, list them with dates where available.  \n6. **Long-Term Impact & Reputation** – If there are statements about repeat clients, high retention rates, or ongoing relationships, include them.  \n7. **Third-Party Validation** – If the company’s success has been referenced in media, research reports, or by industry experts, extract relevant mentions.  \n\n### **Output Format:**  \nWrite the response as a **detailed business overview** in **clear, structured paragraphs**. **Do not use bullet points, lists, or conclusions.** Maintain a **neutral, factual, and concise tone** while ensuring clarity. If no case studies, testimonials, or quantifiable proof are found, **state that the text does not contain this information** instead of assuming.  \n\n### **Additional Instruction:**  \nFor any detail that is not explicitly provided in the text, simply state \"Not mentioned in the text.\" Do not add extra commentary, qualifiers like \"However,\" or any inferred information. Keep your response strictly factual and concise.",
+              "role": "system"
+            },
+            {
+              "content": "=Input: {{ $json.finalText }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        2420,
+        -120
+      ],
+      "id": "de2ecdf0-2078-4a2a-9069-f419780c8ec9",
+      "name": "Analyze Proof Of Success",
+      "credentials": {
+        "openAiApi": {
+          "id": "b2kOBJyl5u4VWa5e",
+          "name": "Clarence | OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const homepageText = $('Remove HTML Homepage').first()?.json?.plainText || \"\";\nconst sectionText = $('Remove HTML Webpages').first()?.json?.data?.[0] || \"\";\n\n// Normalize text by replacing multiple whitespace characters with a single space and trimming.\nconst normalizeText = text => (text ? text.replace(/\\s+/g, ' ').trim() : \"\");\n\nconst normalizedHomepageText = normalizeText(homepageText);\nconst normalizedSectionText = normalizeText(sectionText);\n\nconst finalText = normalizedHomepageText === normalizedSectionText\n  ? homepageText\n  : (homepageText && sectionText) \n    ? homepageText + \"\\n\" + sectionText\n    : homepageText || sectionText; // Return whichever one is available\n\nreturn [{ json: { finalText } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        540,
+        -120
+      ],
+      "id": "d2ca3ed0-0cd7-444a-a3fe-277b2bac8d4e",
+      "name": "Remove Duplicates Texts C/M"
+    },
+    {
+      "parameters": {
+        "jsCode": "const homepageText = $('Remove HTML Homepage').first()?.json?.plainText || \"\";\nconst sectionText = $('Remove HTML Webpages').first()?.json?.data?.[1] || \"\";\n\n// Normalize text by replacing multiple whitespace characters with a single space and trimming.\nconst normalizeText = text => (text ? text.replace(/\\s+/g, ' ').trim() : \"\");\n\nconst normalizedHomepageText = normalizeText(homepageText);\nconst normalizedSectionText = normalizeText(sectionText);\n\nconst finalText = normalizedHomepageText === normalizedSectionText\n  ? homepageText\n  : (homepageText && sectionText) \n    ? homepageText + \"\\n\" + sectionText\n    : homepageText || sectionText; // Return whichever one is available\n\nreturn [{ json: { finalText } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        -120
+      ],
+      "id": "90c842f7-e33b-4cb7-be9b-d4e8f5121769",
+      "name": "Remove Duplicates Texts O/P"
+    },
+    {
+      "parameters": {
+        "jsCode": "const homepageText = $('Remove HTML Homepage').first()?.json?.plainText || \"\";\nconst sectionText = $('Remove HTML Webpages').first()?.json?.data?.[2] || \"\";\n\n// Normalize text by replacing multiple whitespace characters with a single space and trimming.\nconst normalizeText = text => (text ? text.replace(/\\s+/g, ' ').trim() : \"\");\n\nconst normalizedHomepageText = normalizeText(homepageText);\nconst normalizedSectionText = normalizeText(sectionText);\n\nconst finalText = normalizedHomepageText === normalizedSectionText\n  ? homepageText\n  : (homepageText && sectionText) \n    ? homepageText + \"\\n\" + sectionText\n    : homepageText || sectionText; // Return whichever one is available\n\nreturn [{ json: { finalText } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1660,
+        -120
+      ],
+      "id": "3faf7520-ae25-429d-bafe-d9c3c479ecd8",
+      "name": "Remove Duplicates Texts P/D"
+    },
+    {
+      "parameters": {
+        "jsCode": "const homepageText = $('Remove HTML Homepage').first()?.json?.plainText || \"\";\nconst sectionText = $('Remove HTML Webpages').first()?.json?.data?.[3] || \"\";\n\n// Normalize text by replacing multiple whitespace characters with a single space and trimming.\nconst normalizeText = text => (text ? text.replace(/\\s+/g, ' ').trim() : \"\");\n\nconst normalizedHomepageText = normalizeText(homepageText);\nconst normalizedSectionText = normalizeText(sectionText);\n\nconst finalText = normalizedHomepageText === normalizedSectionText\n  ? homepageText\n  : (homepageText && sectionText) \n    ? homepageText + \"\\n\" + sectionText\n    : homepageText || sectionText; // Return whichever one is available\n\nreturn [{ json: { finalText } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2220,
+        -120
+      ],
+      "id": "cb7f46d2-140c-4c4f-903c-11dab81c286d",
+      "name": "Remove Duplicates Texts PoS"
+    },
+    {
+      "parameters": {
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "id": "={{ $json.query.recordId }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        -3620,
+        -40
+      ],
+      "id": "d47369f7-1647-48e5-ba47-0650d1605145",
+      "name": "Pull Lead From Airtable",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "JtCSqEgmEXLGgj8l",
+          "name": "Clarence | Airtable Personal Access Token"
+        }
+      },
+      "notes": "{{ $json.query.recordId }}"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=### **Prompt:**  \n\nAnalyze the following **LinkedIn company profile data** and extract **only verifiable information** from the text. The output should be written as a **cohesive and structured overview**, divided into three sections:  \n\n1. **Company Overview** – Extract the **full official company name** as stated on the profile. Provide the **overview statement** exactly as written in the \"About\" section without modification. Identify the **industry classification** as explicitly mentioned.  \n\n2. **Company Details** – Extract the **company size range** as stated on LinkedIn (e.g., 51-200 employees). If available, include the **exact number of employees listed as \"associated members\"** on LinkedIn. Provide the **year of founding** if explicitly stated. Extract **specializations** exactly as written in the \"Specialties\" section. List **office locations** as stated under the \"Locations\" section. If any of these details are missing, state **\"Not mentioned in the text.\"**  \n\n3. **Funding Information** – If applicable, extract details on the **most recent funding round**, including the funding type (e.g., Series A, Series B) and the date if provided. Identify the **company’s funding stage or status** (e.g., bootstrapped, venture-backed, acquired). If funding information is not available, state **\"Not mentioned in the text.\"**  \n\nThe response should be **fact-based, clearly structured, and free from assumptions or interpretations**. **Do not fabricate or infer missing details**—only include what is explicitly stated in the text.  \n\n### **Output Format:**  \n\n#### **Company Overview**  \n[Write a structured paragraph including the company name, overview statement, and industry classification.]  \n\n#### **Company Details**  \n[Write a structured paragraph listing company size, exact employee count (if available), founding year, specializations, and office locations.]  \n\n#### **Funding Information**  \n[Write a structured paragraph summarizing funding details if available. If no funding information is provided, state \"Not mentioned in the text.\"]  \n\n**Additional Instruction:**  \n- Do not include bullet points—write in **clear, well-structured paragraphs** for easy readability.  \n- Avoid redundancy and unnecessary filler text—**keep it concise yet informative**.  \n- For any detail that is not explicitly provided in the text, simply state \"Not mentioned in the text.\" Do not add extra commentary, qualifiers like \"However,\" or any inferred information. Keep your response strictly factual and concise.",
+              "role": "system"
+            },
+            {
+              "content": "=Input: {{ $('Remove HTML LinkedIn Page').item.json.plainText }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        -1440,
+        -460
+      ],
+      "id": "2d0e3ab5-8ec4-4847-a9d5-0801fffb1aa6",
+      "name": "Analyze Company LinkedIn",
+      "credentials": {
+        "openAiApi": {
+          "id": "b2kOBJyl5u4VWa5e",
+          "name": "Clarence | OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apify.com/v2/acts/curious_coder~linkedin-profile-scraper/run-sync-get-dataset-items?token=[YOUR API KEY]",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=[INSERT JSON FROM APIFY SCRAPER]",
+        "options": {}
+      },
+      "id": "2d625cdf-2a01-4f3e-a147-8a9925a13e53",
+      "name": "LinkedIn Profile Scraper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1080,
+        -460
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "[INPUT JSON FROM APIFY SCRAPER HERE]\n\nYOU WANT THE LINKEDIN PROFILE URL TO BE VARIABLE US THIS AS AN EXMAMPLE: \"{{ $('Pull Lead From Airtable').item.json['LinkedIn URL'] }}\"\n\nhttps://www.linkedin.com/in/alexhormozi/"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst text = items.map((item) => JSON.stringify(item.json)).join(\", \");\n\nreturn { text };\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -880,
+        -460
+      ],
+      "id": "5c5af272-e457-4380-be93-c0b1e8ece9dd",
+      "name": "JSON Into Text"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=### **Prompt: LinkedIn Personal Profile Data Extraction**  \n\nAnalyze the following **LinkedIn personal profile data** and extract **only verifiable information** from the text. The output should be written as a **cohesive and structured overview**, divided into three sections:  \n\n1. **Profile Overview** – Extract the **individual’s full name** as stated on the profile. Summarize their **core expertise and skills**, focusing on areas of specialization, professional strengths, and industry focus. Highlight any **major career achievements, awards, or significant contributions** explicitly mentioned. If stated, include their **aspirations, long-term career goals, and professional ambitions**. If the profile contains information about their **personal mission, values, or guiding principles**, integrate those as well. Finally, describe their **unique value proposition**—what differentiates them in their field, whether it’s **technical expertise, leadership, or strategic vision**.  \n\n2. **Experience Summary** – Extract and provide a structured summary of the individual's **current job title, company, and tenure** as stated on their profile. Describe their **responsibilities, leadership role, and contributions to business growth** based on the text. If listed, include **previous positions and career trajectory**, showing how they have progressed over time. Mention **seniority level** (executive, management, specialist) if explicitly stated. Highlight any **key projects, deals, or initiatives** they have led or contributed to. If the profile contains details about their **industry background or sector expertise**, integrate that as well.  \n\n3. **Education & Training** – Extract and list the **individual’s academic background, degrees earned, and universities attended** as displayed on their profile. Include **fields of study and specializations** relevant to their industry. If additional **certifications, executive programs, or professional development courses** are mentioned, summarize those as well. If no education details are provided, state **\"Not mentioned in the text.\"** instead of making assumptions.  \n\nThe response should be **fact-based, clearly structured, and free from assumptions or interpretations**. **Do not fabricate or infer missing details**—only include what is explicitly stated in the text.  \n\n### **Output Format:**  \n\n#### **Profile Overview**  \n[Write a structured paragraph containing the full name, core expertise, skills, major career achievements, aspirations, professional goals, personal mission, values, and unique value proposition.]  \n\n#### **Experience Summary**  \n[Write a structured paragraph detailing their current role, responsibilities, tenure, contributions, career progression, seniority level, and key projects or business initiatives.]  \n\n#### **Education & Training**  \n[Write a structured paragraph listing degrees, universities, specializations, and certifications. If no education details are provided, state \"Not mentioned in the text.\"]  \n\n\n### **Additional Instructions:**  \n- Do **not** include bullet points—write in **clear, structured paragraphs** for readability.  \n- Avoid redundancy—**keep it concise yet informative**.  \n- If a specific detail is not explicitly provided, state **\"Not mentioned in the text.\"** Do **not** add extra commentary or inferred details.  \n- **Extract text exactly as written** in the profile; do not paraphrase or reword personal descriptions.  ",
+              "role": "system"
+            },
+            {
+              "content": "=Input: {{ $json.text }}\nToday's date: {{ $now }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        -680,
+        -460
+      ],
+      "id": "bfa0caf3-dcf1-4395-8acb-163e5a1e9a69",
+      "name": "Analyze Personal LinkedIn",
+      "credentials": {
+        "openAiApi": {
+          "id": "b2kOBJyl5u4VWa5e",
+          "name": "Clarence | OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Link to Apify scraper used:\nhttps://console.apify.com/actors/PEgClm7RgRD7YO94b/input",
+        "height": 80,
+        "width": 460,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1080,
+        -580
+      ],
+      "id": "581b1028-3045-4fcb-a6ed-c5e97ceb6561",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "url": "={{(() => {\n  const website = $('Pull Lead From Airtable').item.json['Company Website'];\n  const email = $('Pull Lead From Airtable').item.json['Email Address'];\n  // If 'Company Website' is empty, derive from 'Email Address'\n  return website || `https://${email.split('@')[1]}`;\n})()}}",
+        "options": {}
+      },
+      "id": "6e034855-173e-45af-b596-2a8419aa09e9",
+      "name": "Company Homepage Scraper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -320,
+        -460
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  if (!item.json.plainText || item.json.plainText.trim().length === 0) {\n    return { json: { message: \"item is empty\" } };\n  } else {\n    return { json: item.json };\n  }\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        120,
+        -460
+      ],
+      "id": "6cc811f0-8ba1-4bfe-9356-43fdee417f30",
+      "name": "Check If Empty"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f70aeaf4-f4ef-4cd6-b239-2f4911c079de",
+              "leftValue": "={{ $json.message }}",
+              "rightValue": "item is empty",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        340,
+        -460
+      ],
+      "id": "3ee87b5c-bc98-4e4a-82be-c15bc91b4411",
+      "name": "Unable To Scrape Website?"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1260,
+        -720
+      ],
+      "id": "e2478d80-05a2-424f-95ba-ebc381e4ff44",
+      "name": "Update Lead W/ Enrichment",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "JtCSqEgmEXLGgj8l",
+          "name": "Clarence | Airtable Personal Access Token"
+        }
+      },
+      "notes": "{{ $json.query.recordId }}"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7540d0aa-8723-4dd0-9c11-f9ad60a4fa38",
+              "leftValue": "={{ $('Pull Lead From Airtable').item.json.Location }}",
+              "rightValue": "United States",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "0dcbe8d3-7897-4a6b-a3f1-08667c48c5c0",
+      "name": "US: Yes or No?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -3000,
+        -140
+      ],
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7540d0aa-8723-4dd0-9c11-f9ad60a4fa38",
+              "leftValue": "={{ $json.message.content['1.) Business Model']['Business Model (B2B/B2C)'] }}",
+              "rightValue": "B2C",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "01b4b925-542b-48db-89c9-f44991b8df5b",
+      "name": "B2B: Yes or No?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1820,
+        -240
+      ],
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7540d0aa-8723-4dd0-9c11-f9ad60a4fa38",
+              "leftValue": "={{ $json.message.content['2.) Number of Employees']['Exact Number of Employees'] }}",
+              "rightValue": 30,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            },
+            {
+              "id": "beb073f3-f5bc-4ec2-890e-f16ed4da2572",
+              "leftValue": "={{ $json.message.content['2.) Number of Employees']['Exact Number of Employees'] }}",
+              "rightValue": 5,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d8edc820-6d91-43b8-a72e-17f1634c2b04",
+      "name": "Headcount: >5, <30?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1640,
+        -340
+      ],
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Pull Lead From Airtable').item.json[\"LinkedIn Organization URL\"] }}",
+        "options": {}
+      },
+      "id": "68246009-1253-4956-b005-c009634d5517",
+      "name": "LinkedIn Company Scraper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2600,
+        -240
+      ],
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const htmlContent = $node[\"LinkedIn Company Scraper\"].json[\"data\"]; // Replace this with the field containing your HTML content\n\n// Function to strip HTML tags and clean the text\nconst extractPlainText = (html) => {\n    if (!html) return \"\";\n\n    // Remove script and style tags along with their content\n    const withoutScriptsAndStyles = html.replace(/<script[\\s\\S]*?>[\\s\\S]*?<\\/script>/gi, \"\")\n                                        .replace(/<style[\\s\\S]*?>[\\s\\S]*?<\\/style>/gi, \"\");\n\n    // Remove all remaining HTML tags\n    const strippedText = withoutScriptsAndStyles.replace(/<\\/?[^>]+(>|$)/g, \"\");\n\n    // Replace HTML entities with their plain-text equivalents\n    const decodedText = strippedText.replace(/&nbsp;/gi, \" \")\n                                    .replace(/&amp;/gi, \"&\")\n                                    .replace(/&lt;/gi, \"<\")\n                                    .replace(/&gt;/gi, \">\")\n                                    .replace(/&quot;/gi, \"\\\"\")\n                                    .replace(/&#39;/gi, \"'\");\n\n    // Replace multiple spaces, tabs, and newlines with a single space\n    const cleanedText = decodedText.replace(/\\s+/g, \" \").trim();\n\n    return cleanedText;\n};\n\n// Call the function to process the HTML content\nconst plainText = extractPlainText(htmlContent);\n\n// Return the plain text as the output of this node\nreturn {\n    plainText: plainText,\n};\n\n"
+      },
+      "id": "dfb4b168-ffd1-431a-9bc7-0298ef25c09e",
+      "name": "Remove HTML LinkedIn Page",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2380,
+        -240
+      ],
+      "alwaysOutputData": false,
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "c55f6793-a9f0-40e7-89b4-1d162067d1c4",
+      "name": "Update Lead - Not US",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        -2800,
+        -40
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "JtCSqEgmEXLGgj8l",
+          "name": "Clarence | Airtable Personal Access Token"
+        }
+      },
+      "notes": "{{ $('Pull Lead From Airtable').item.json.id }}"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "32491f55-1f58-4b64-b259-b0b771780642",
+      "name": "Update Lead - Not B2B",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        -1640,
+        -140
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "JtCSqEgmEXLGgj8l",
+          "name": "Clarence | Airtable Personal Access Token"
+        }
+      },
+      "notes": "{{ $('Pull Lead From Airtable').item.json.id }}"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "e4ab0494-21d5-4eea-9f95-8586908efd57",
+      "name": "Update Lead - Too Big or Small",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        -1440,
+        -220
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "JtCSqEgmEXLGgj8l",
+          "name": "Clarence | Airtable Personal Access Token"
+        }
+      },
+      "notes": "{{ $('Pull Lead From Airtable').item.json.id }}"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.neverbounce.com/v4/single/check?key=[YOUR NeverBounce API KEY]&email={{ $json[\"Email Address\"] }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -3420,
+        -40
+      ],
+      "id": "4e96d5b0-c5b4-4f0c-8ae4-3a55bf86724b",
+      "name": "Email Validation - NeverBounce"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "572a70bf-ae83-4107-906a-24d2d2971c44",
+              "leftValue": "={{ $json.result }}",
+              "rightValue": "valid",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -3220,
+        -40
+      ],
+      "id": "c410fefe-60fd-4f13-aac1-4b814861a458",
+      "name": "Email Valid?"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "17d4b08e-23ac-4645-9c26-d835fb5dbeea",
+      "name": "Update Lead - No Valid Email",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        -3000,
+        60
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "JtCSqEgmEXLGgj8l",
+          "name": "Clarence | Airtable Personal Access Token"
+        }
+      },
+      "notes": "{{ $('Pull Lead From Airtable').item.json.id }}"
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.floor(Math.random() * (20 - 8 + 1)) + 8 }}"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -2800,
+        -240
+      ],
+      "id": "a54fd454-eff0-4b8f-ad27-ca0f6ffd5eff",
+      "name": "Wait",
+      "webhookId": "af996d71-9e69-483d-9bf4-73e6451aef3c"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are an expert in professional business analysis and LinkedIn data extraction. Your task is to analyze the scraped LinkedIn profile of a company to produce a high-quality, detailed report. Your response must be precise, structured, and focused on the specific insights outlined below. Ensure all outputs are professional, fact-based, and well-organized.",
+              "role": "system"
+            },
+            {
+              "content": "=**Prompt:**  \nAnalyze the scraped LinkedIn profile data and extract the following key details:  \n\n1.) **Business Model**: Determine whether the company operates in a **B2B (business-to-business)** or **B2C (business-to-consumer)** model. The response must clearly state only **one** of these options.  \n\n2.) **Number of Employees**: Extract the exact number of employees listed on the profile. This number is found in text formatted as: `\"Follow View all X employees\"`. **Always output as a numerical value (# number).**  \n\n### **Output Format (JSON)**  \nEnsure the output follows this exact structure:  \n\n```json\n{\n  \"1.) Business Model\": {\n    \"Business Model (B2B/B2C)\": \"Specify B2B or B2C\"\n  },\n  \"2.) Number of Employees\": {\n    \"Exact Number of Employees\": #\n  },\n}\n```\n\n### **Rules & Constraints:**  \n- **Strictly follow the JSON structure above.**  \n- **No assumptions** – only use explicitly stated data. If unavailable, return `\"Not specified\"` instead.  \n- **Never include additional details, descriptions, or filler text.**  \n- **Ensure \"Exact Number of Employees\" is always a # number.**  \n- **For the cybersecurity question, answer only \"Yes\" or \"No\".**  "
+            },
+            {
+              "content": "={{ $json.plainText }}\n- Today's date: {{$now}}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "id": "06ffcc6d-dd3b-4526-b3ad-1d0cda9e5824",
+      "name": "Analyze Company LinkedIn_",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.7,
+      "position": [
+        -2180,
+        -240
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "openAiApi": {
+          "id": "b2kOBJyl5u4VWa5e",
+          "name": "Clarence | OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "From the Header & Top Navigation\nLikely Information Found:\n\nCompany Name – The official registered name of the company.\nIndustry – The primary sector in which the company operates (e.g., SaaS, healthcare, fintech).\nLocation – The company’s geographic headquarters or primary office.\nCompany Size – Number of employees, often categorized into ranges (e.g., 1-10, 11-50, 51-200, etc.).",
+        "height": 200,
+        "width": 500,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2080,
+        -1240
+      ],
+      "id": "796afe15-4beb-4e1c-8e56-1507a7b1dd57",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "From the Sidebar (Funding Section, if available)\nLikely Information Found:\n\nRecent Funding Round – If applicable, details on the company’s latest funding event (e.g., Series A, Series B, amount, and date).\nFunding Stage/Status – Current funding position (e.g., bootstrapped, venture-backed, acquired).",
+        "width": 500,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -920,
+        -1200
+      ],
+      "id": "1bdcca69-260a-49ab-ad66-9325ccfd4a40",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "From the Company Overview/About Section\nLikely Information Found:\n\nCompany Name – The full official name of the company as stated on the profile.\nOverview Statement – The company’s main description or summary from the \"About\" section. Extract the full statement without modification.\nIndustry – The primary industry classification of the company as explicitly mentioned.\nCompany Size (Range) – The estimated size of the company based on LinkedIn’s provided range (e.g., 51-200 employees).\nExact Number of Employees (Associated Members) – The specific number of employees listed as \"associated members\" on LinkedIn. If unavailable, state \"Not mentioned in the text.\"\nFounded – The year the company was founded, if explicitly stated. If not mentioned, state \"Not mentioned in the text.\"\nSpecializations – Key areas of expertise, technologies, or capabilities listed under the \"Specialties\" section. Extract them exactly as stated without modification.\nOffice Locations – The exact office locations listed under the \"Locations\" section. If not specified, state \"Not mentioned in the text.\"",
+        "height": 440,
+        "width": 500,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1500,
+        -1480
+      ],
+      "id": "8b1423ff-e5da-4690-9a47-aeda71d72711",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "Experience Section\nLikely Information Found:\n\nCurrent job title & company – The individual's current role and employer, often paired with tenure details.\nJob responsibilities & impact – A summary of duties, leadership responsibilities, and contributions to business growth.\nCompany background & industry – The sector the company operates in, giving insight into their professional environment.\nPrevious positions & career trajectory – A timeline of past roles, showing career progression, promotions, or job changes.\nEmployment duration & stability – Length of time spent in different positions, useful for identifying job-hopping vs. long-term experience.\nSeniority level & leadership role – Whether they’re at an executive, management, or specialist level in their organization.\nKey projects & initiatives – Notable projects, deals closed, or campaigns led, showcasing their business contributions.",
+        "height": 360,
+        "width": 500,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        280,
+        -1400
+      ],
+      "id": "f6abb31d-b75a-4570-b028-322a187011c6",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "Education Section\nLikely Information Found:\n\nAcademic background & degrees – The highest level of education achieved, such as Bachelor's, Master's, or PhD.\nUniversities attended – Institutions where they studied, which can signal prestige and networking potential.\nFields of study & specializations – Relevant majors or coursework that align with their industry expertise.\nAdditional certifications & training – Professional development courses, online certifications, or executive education programs.",
+        "height": 240,
+        "width": 500,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        860,
+        -1280
+      ],
+      "id": "924e62b2-a328-45bd-8d8e-4dd154fa10d3",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "Profile Header/About Section\nLikely Information Found:\n\nCore expertise & skills – Areas of specialization and professional strengths, typically extracted from the summary or skills section.\nCareer highlights & accomplishments – Major achievements, awards, or significant contributions mentioned in their narrative.\nAspirations & professional goals – Stated ambitions, future career moves, or long-term objectives.\nPersonal mission & values – Underlying motivations, beliefs, or industry impact they aim to achieve.\nIndustry focus & niche expertise – The specific industries or verticals they specialize in, such as finance, healthcare, or tech.\nUnique value proposition – What sets them apart from others in their field, whether it’s leadership, technical expertise, or strategic vision.\nNarrative style & tone – Whether their profile is formal and professional, casual and personable, or aspirational and visionary.",
+        "height": 360,
+        "width": 500,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -300,
+        -1400
+      ],
+      "id": "fdf9621d-35ea-49ad-9c62-116ad20e4738",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputData = $node[\"Company Homepage Scraper\"].json.data; // Reference the correct node\n\nfunction extractHeaderLinks(htmlString) {\n    const headerLinks = htmlString.match(/<a[^>]+href=[\"'](.*?)[\"'][^>]*>(.*?)<\\/a>/g);\n    \n    if (!headerLinks) return [];\n\n    return headerLinks.map(link => {\n        const urlMatch = link.match(/href=[\"'](.*?)[\"']/);\n        const textMatch = link.match(/>(.*?)<\\/a>/);\n        return {\n            text: textMatch ? textMatch[1].trim() : '',\n            url: urlMatch ? urlMatch[1] : ''\n        };\n    }).filter(item => item.url); // Remove any empty URLs\n}\n\nreturn extractHeaderLinks(inputData);\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        540,
+        -360
+      ],
+      "id": "0a20bdf1-f120-4ef2-a9d4-69d3f4c6ecce",
+      "name": "Filter HTML For URLs",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "content": "## Personal LinkedIn\n",
+        "height": 80,
+        "width": 1660
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -300,
+        -1000
+      ],
+      "id": "ccb9a138-77c5-403e-80ae-fe0e6fef0f4b",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "content": "## Company LinkedIn\n",
+        "height": 80,
+        "width": 1660,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2080,
+        -1000
+      ],
+      "id": "420fb646-0267-490a-905f-bd0f0254ae2c",
+      "name": "Sticky Note8"
+    },
+    {
+      "parameters": {
+        "content": "Company/Mission\nLikely Information Found:\n\nCompany history & origin – When it was founded, by whom, and why.\nMission statement – The company’s core purpose and values.\nVision statement – Future goals and aspirations.\nCompany size & scale – Number of employees, locations, and growth trajectory.\nLeadership team – Founders, executives, and key decision-makers (great for name-dropping in emails).\nIndustries served – Broad industry classification (e.g., SaaS, healthcare, fintech).\nBrand tone & personality – Formal vs. casual, innovation-driven vs. tradition-focused.\nCompany achievements – Awards, recognitions, partnerships, or milestones.",
+        "height": 380,
+        "width": 380,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        760,
+        340
+      ],
+      "id": "d8046d20-1c9c-4d19-a9be-e5f5080ef15f",
+      "name": "Sticky Note9"
+    },
+    {
+      "parameters": {
+        "content": "Offerings & Positioning\nLikely Information Found:\n\nCore products/services – What they sell and how it benefits customers.\nFeature lists & differentiators – What makes them unique vs. competitors.\nPricing models (sometimes) – Subscription-based, enterprise, per-user, etc.\nIndustries served – More detailed insight into niche verticals.\nUse cases – Real-world applications of their solution.\nTarget customers – SMBs, enterprises, B2B, B2C, etc.",
+        "height": 380,
+        "width": 380,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1220,
+        340
+      ],
+      "id": "07fcf5f8-1870-46dd-93b5-9c077f5c338d",
+      "name": "Sticky Note10"
+    },
+    {
+      "parameters": {
+        "content": "Process & Differentiation\nLikely Information Found:\n\nCompany methodology – How they deliver their services (e.g., agile, data-driven, customer-centric).\nStep-by-step process – What happens from onboarding to results.\nProprietary tech or frameworks – Any unique models, methodologies, or patents.\nValue proposition – What makes them better than competitors.\nOnboarding experience – How they work with clients.\nKey metrics they focus on – Efficiency, cost reduction, revenue impact, etc.",
+        "height": 380,
+        "width": 380,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1680,
+        340
+      ],
+      "id": "5520e232-db88-4321-8b9e-f1b86539ae51",
+      "name": "Sticky Note11"
+    },
+    {
+      "parameters": {
+        "content": "Proof Of Success\nLikely Information Found:\n\nCase studies – Specific client success stories with numbers.\nTestimonials & client quotes – Social proof from previous customers.\nLogos of known clients – Enterprises, Fortune 500s, or industry leaders they serve.\nPortfolio of past work – Showcases and tangible results.\nSuccess metrics – Percentage improvements, ROI, saved time, etc.",
+        "height": 380,
+        "width": 380,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2140,
+        340
+      ],
+      "id": "bbb5c049-2228-4911-811a-0006754d3f7d",
+      "name": "Sticky Note12"
+    },
+    {
+      "parameters": {
+        "content": "## Company Website",
+        "height": 80,
+        "width": 1760,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        760,
+        220
+      ],
+      "id": "d0c224e7-10b6-461e-96a7-9dd6fa53ab1d",
+      "name": "Sticky Note13"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=### **Prompt**\n\nGiven the provided **LinkedIn data**—including the company’s \"About\" section, industry classification, company size, and the decision-maker’s profile—extract and structure the following **highly personalized** variables for a compelling cold email.\n\nThe output should seamlessly integrate into the following email template:\n\n### **Cold Email Template:**\n\n> **Subject:** (company_name) + Stroom: A new growth opportunity?  \n>  \n> Hi (first_name),  \n>  \n> I came across (company_name) and was really impressed by (company_specialty)—especially with how you’ve contributed to its growth.  \n>  \n> At Stroom, we help companies like yours build independent sales channels that generate additional revenue without interfering with existing strategies. Since (company_name) is already making waves in (industry), this could be a great way to scale further.  \n>  \n> Would it make sense to send over a quick breakdown of how similar companies are doing this?  \n>  \n> Best,  \n> [Your Name]  \n> Stroom  \n\n### **Guidelines for Extraction & Personalization:**\n\n- **Make it sound human.** Tone should be **casual, confident, and natural**—avoid robotic or overly formal language.  \n- **Draw from context.** If the LinkedIn “About” section is vague, **use logic and pattern recognition** to fill in plausible details.  \n- **Personal, not generic.** The goal is to create an email that **feels handcrafted and relevant**, even when based only on LinkedIn.  \n- **Tight and to the point.** No wordy responses—**short, punchy, and specific wins.**\n\n### **Variables to Extract & Formatting Rules:**\n\n#### **1. CompanyName**  \n- The official company name as shown on LinkedIn.  \n- Use correct capitalization and punctuation.\n\n#### **2. FirstName**  \n- The first name of the decision-maker (e.g., founder, CEO, Head of Growth).  \n- Use professional formatting (e.g., \"Jasper\", not \"jasper\" or \"Mr. Jasper\").\n\n#### **3. CompanySpecialty**  \n- One standout quality, result, or value proposition the company is known for.  \n- Usually found in the “About” section or inferred from company focus.  \n- Should read like a natural compliment (e.g., “empowering retailers with AI-driven pricing”).\n\n#### **4. Industry**  \n- Natural phrasing of the company’s sector or vertical.  \n- Must fit grammatically in: _“making waves in (industry)”_\n\n### **Structured JSON Output Format:**\n\n```json\n{\n  \"company_name\": \"...\",\n  \"first_name\": \"...\",\n  \"company_specialty\": \"...\",\n  \"industry\": \"...\"\n}\n```"
+            },
+            {
+              "content": "={{ $('Analyze Company LinkedIn.').first().json.message.content }}. {{ $('Analyze Personal LinkedIn.').first().json.message.content }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        900,
+        -560
+      ],
+      "id": "d586beb8-68df-4b4e-934b-512bb2a0de2f",
+      "name": "Determine Variables",
+      "credentials": {
+        "openAiApi": {
+          "id": "b2kOBJyl5u4VWa5e",
+          "name": "Clarence | OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an expert in cold email personalization for B2B outreach. Your task is to extract **highly relevant variables** from company data to populate a cold email tailored to decision makers at **staffing & recruiting firms**.\n\nYou'll be given LinkedIn bios, websites, case studies, testimonials, or other context. Based on that, extract and structure the variables below, then insert them into the provided email template.\n\n### Email Template:\n\n> Hey (first_name),  \n>  \n> We help (CompanyOverview) firms reach (ICPofLead) struggling with (PainPointLeadSolves).  \n>  \n> With (Industry) becoming more competitive, we’ve been working closely with founders to turn underperforming channels into scalable growth systems.  \n>  \n> We just booked 27 calls for a staffing & recruiting firm last month—without paid ads or endless follow-ups.  \n>  \n> Would it be helpful if I showed you how?  \n>  \n> Best,  \n> Clarence  \n\n###  Your Lead List:\nAll contacts are **decision makers (founders, partners, directors, or heads of growth)** at **staffing & recruiting firms**. This should guide your language, assumptions, and variable selection.\n\n###  Guidelines for Extraction & Personalization:\n\n- **Write like a human.** Tone should be casual, sharp, and confident—not robotic.\n- **Tailored to recruiting.** Every variable should feel written *for a recruiter* who’s thinking about growth, sourcing, or placement metrics.\n- **Infer smartly.** If info is missing, deduce from context rather than saying “not listed.”\n- **No filler.** Be direct, clean, and value-focused.\n- **Punchy and relevant.** Use phrases that sound natural in real cold outreach.\n\n###  Variables to Extract & Formatting Rules:\n\n#### 1. **CompanyOverview**  \n- A short, compelling phrase describing their core service/expertise.  \n- **3 words max.**  \n- Must fit: *We help [CompanyOverview] firms*  \n- **Examples:** `\"tech recruiting\"`, `\"executive search\"`, `\"healthcare staffing\"`\n\n#### 2. **ICPofLead**  \n- Who their ideal clients or placements are, in natural language.  \n- **4 words max.**  \n- Must fit: *reach [ICPofLead] struggling with [PainPointLeadSolves]*  \n- **Examples:** `\"high-growth startups\"`, `\"VC-backed fintechs\"`, `\"hospital networks in need\"`\n\n#### 3. **PainPointLeadSolves**  \n- The urgent business problem they solve for clients.  \n- **5 words max.**  \n- Must resonate with *client-side pain* (e.g. hiring speed, talent quality).  \n- **Examples:** `\"hiring top engineers fast\"`, `\"retaining hard-to-fill roles\"`\n\n#### 4. **Industry**  \n- A natural phrase for the industry they operate in.  \n- Must fit: *With [Industry] becoming more competitive...*  \n- **Examples:** `\"tech recruiting\"`, `\"executive search\"`, `\"life sciences staffing\"`\n\n### Final Output Format (JSON):\n\n```json\n{\n  \"CompanyOverview\": \"...\",\n  \"ICPofLead\": \"...\",\n  \"PainPointLeadSolves\": \"...\",\n  \"PrimaryServices\": \"...\",\n  \"Industry\": \"...\"\n}\n```"
+            },
+            {
+              "content": "={{ $('Analyze Company/Mission').item.json.message.content }}. {{ $('Analyze Offerings & Positioning').item.json.message.content }}. {{ $('Analyze Process & Differentiation').item.json.message.content }}. {{ $('Analyze Proof Of Success').item.json.message.content }}. {{ $('Analyze Company LinkedIn').first().json.message.content }}. {{ $('Analyze Personal LinkedIn').first().json.message.content }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        3140,
+        -120
+      ],
+      "id": "15d01480-770d-4062-8e6d-63a4e909a099",
+      "name": "Determine Variables.",
+      "credentials": {
+        "openAiApi": {
+          "id": "b2kOBJyl5u4VWa5e",
+          "name": "Clarence | OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        3520,
+        -120
+      ],
+      "id": "c201c918-52d1-4314-b1de-dc486101a707",
+      "name": "Update Lead W/ Enrichment.",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "JtCSqEgmEXLGgj8l",
+          "name": "Clarence | Airtable Personal Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.instantly.ai/api/v2/leads",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer [YOUR INSTANTLY API KEY]"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"campaign\": \"[YOUR CAMPAIGN ID]\",\n  \"email\": \"{{ $('Pull Lead From Airtable').first().json['Email Address'] }}\",\n  \"personalization\": \"\",\n  \"website\": \"{{ $('Pull Lead From Airtable').first().json['Company Website'] }}\",\n  \"last_name\": \"\",\n  \"first_name\": \"{{ $('Pull Lead From Airtable').first().json['First Name'] }}\",\n  \"company_name\": \"{{ $('Clean Company Name.').item.json.message.content }}\",\n  \"phone\": \"{{ $('Pull Lead From Airtable').first().json.Phone }}\",\n  \"skip_if_in_workspace\": false,\n  \"skip_if_in_campaign\": true,\n  \"skip_if_in_list\": true,\n  \"custom_variables\": {\n    \"CompanyOverview\": \"{{ $json.message.content.CompanyOverview }}\",\n    \"ICPofLead\": \"{{ $json.message.content.ICPofLead }}\",\n    \"PainPointLeadSolves\": \"{{ $json.message.content.PainPointLeadSolves }}\",\n    \"industry\": \"{{ $json.message.content.Industry }}\"\n  }\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3520,
+        60
+      ],
+      "id": "0b403989-0b8c-4070-a996-6537389d6caa",
+      "name": "Upload Lead To Instantly."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.instantly.ai/api/v2/leads",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer [YOUR INSTANTLY API KEY]"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"campaign\": \"[YOUR CAMPAIGN ID]\",\n  \"email\": \"{{ $('Pull Lead From Airtable').first().json['Email Address'] }}\",\n  \"personalization\": \"\",\n  \"website\": \"{{ $('Pull Lead From Airtable').first().json['Website URL'] }}\",\n  \"last_name\": \"\",\n  \"first_name\": \"{{ $('Pull Lead From Airtable').first().json['First Name'] }}\",\n  \"company_name\": \"{{ $('Pull Lead From Airtable').first().json['Company Name'] }}\",\n  \"phone\": \"{{ $('Pull Lead From Airtable').first().json.Phone }}\",\n  \"skip_if_in_workspace\": false,\n  \"skip_if_in_campaign\": true,\n  \"skip_if_in_list\": true,\n  \"custom_variables\": {\n    \"industry\": \"{{ $json.message.content.industry }}\",\n    \"unique_strength_or_feature\": \"{{ $json.message.content.unique_strength_or_feature }}\"\n  }\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1260,
+        -560
+      ],
+      "id": "61eb5ffa-9846-4d7d-a867-489ce0f90665",
+      "name": "Upload Lead To Instantly"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "**Prompt: Ultimate Company Name Cleaner**\n\nYou are an expert in simplifying company names for professional communication. When given a company name, return only the **core name** that employees, customers, and partners would naturally use in casual conversation, emails, or internal documents.\n\nYour goal is to extract the **clean, concise, and informal version** of the name by applying the following rules:\n\n\n### What to Remove:\n- **Legal suffixes**: LLC, Ltd., Inc., GmbH, BV, SA, LLP, etc.\n- **Generic business terms**: Group, Partners, Solutions, Technologies, Agency, Recruiting, Consulting, Holdings, Services, Corporation, Co., and similar.\n- **Conjunctions and modifiers**: \"and\", \"&\", “International”, “Global”, “Worldwide”, “Enterprises”, “Company”, “Firm”, etc.\n\n### What to Keep:\n- The **most distinctive and recognizable term** in the name.\n- **Acronyms** if they represent the core brand (e.g., “IBM” should stay “IBM”).\n- Single-word names even if they’re generic-sounding (e.g., “Monarch Holdings” → “Monarch”).\n\n### Additional Heuristics:\n- If the name has **multiple meaningful words**, choose the **first** or **most brand-like** term used conversationally (e.g., “Ocular Recruiting” → “Ocular”).\n- If the company name is an **acronym followed by a descriptor**, retain only the acronym (e.g., “XYZ Technologies” → “XYZ”).\n- If the name is something like “The Fox & Badger Co.” → return the part most likely used informally: **Fox & Badger** → **FoxBadger** or **Fox** if needed for brevity.\n- If the cleaned name still feels too long or awkward, simplify to what a team member might casually say (e.g., “North Ridge Ventures” → “North Ridge” or just “North”).\n\n** Output Format:**\nOutput only the cleaned company name — **no quotation marks, explanations, or extra text**.\n\n**Examples:**\n- “Ocular Recruiting” → **Ocular**  \n- “Nimbus Solutions LLC” → **Nimbus**  \n- “Bravado Group Inc.” → **Bravado**  \n- “Apex & Co.” → **Apex**  \n- “XYTech Consulting BV” → **XYTech**  \n- “North Ridge Ventures Ltd.” → **North Ridge** or **North** (based on common use)  \n- “Skyline Holdings International” → **Skyline**  \n- “AVR Partners GmbH” → **AVR**"
+            },
+            {
+              "content": "=Scraped Company Name: {{ $('Pull Lead From Airtable').first().json['Company Name'] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "82c86489-973d-4fc4-a1a9-889aebf9d9eb",
+      "name": "Clean Company Name",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.7,
+      "position": [
+        540,
+        -560
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "b2kOBJyl5u4VWa5e",
+          "name": "Clarence | OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "**Prompt: Ultimate Company Name Cleaner**\n\nYou are an expert in simplifying company names for professional communication. When given a company name, return only the **core name** that employees, customers, and partners would naturally use in casual conversation, emails, or internal documents.\n\nYour goal is to extract the **clean, concise, and informal version** of the name by applying the following rules:\n\n\n### What to Remove:\n- **Legal suffixes**: LLC, Ltd., Inc., GmbH, BV, SA, LLP, etc.\n- **Generic business terms**: Group, Partners, Solutions, Technologies, Agency, Recruiting, Consulting, Holdings, Services, Corporation, Co., and similar.\n- **Conjunctions and modifiers**: \"and\", \"&\", “International”, “Global”, “Worldwide”, “Enterprises”, “Company”, “Firm”, etc.\n\n### What to Keep:\n- The **most distinctive and recognizable term** in the name.\n- **Acronyms** if they represent the core brand (e.g., “IBM” should stay “IBM”).\n- Single-word names even if they’re generic-sounding (e.g., “Monarch Holdings” → “Monarch”).\n\n### Additional Heuristics:\n- If the name has **multiple meaningful words**, choose the **first** or **most brand-like** term used conversationally (e.g., “Ocular Recruiting” → “Ocular”).\n- If the company name is an **acronym followed by a descriptor**, retain only the acronym (e.g., “XYZ Technologies” → “XYZ”).\n- If the name is something like “The Fox & Badger Co.” → return the part most likely used informally: **Fox & Badger** → **FoxBadger** or **Fox** if needed for brevity.\n- If the cleaned name still feels too long or awkward, simplify to what a team member might casually say (e.g., “North Ridge Ventures” → “North Ridge” or just “North”).\n\n** Output Format:**\nOutput only the cleaned company name — **no quotation marks, explanations, or extra text**.\n\n**Examples:**\n- “Ocular Recruiting” → **Ocular**  \n- “Nimbus Solutions LLC” → **Nimbus**  \n- “Bravado Group Inc.” → **Bravado**  \n- “Apex & Co.” → **Apex**  \n- “XYTech Consulting BV” → **XYTech**  \n- “North Ridge Ventures Ltd.” → **North Ridge** or **North** (based on common use)  \n- “Skyline Holdings International” → **Skyline**  \n- “AVR Partners GmbH” → **AVR**"
+            },
+            {
+              "content": "=Scraped Company Name: {{ $('Pull Lead From Airtable').first().json['Company Name'] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cce237b6-5322-4a58-9739-73a902555c57",
+      "name": "Clean Company Name.",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.7,
+      "position": [
+        2780,
+        -120
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "b2kOBJyl5u4VWa5e",
+          "name": "Clarence | OpenAi account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Pull Lead From Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Turn X Items Into 1": {
+      "main": [
+        [
+          {
+            "node": "Determine Valuable URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Valuable URLs": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Remove HTML Webpages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove HTML Homepage": {
+      "main": [
+        [
+          {
+            "node": "Check If Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove HTML Webpages": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates Texts C/M",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Company/Mission": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates Texts O/P",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Offerings & Positioning": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates Texts P/D",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Process & Differentiation": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates Texts PoS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates Texts C/M": {
+      "main": [
+        [
+          {
+            "node": "Analyze Company/Mission",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates Texts O/P": {
+      "main": [
+        [
+          {
+            "node": "Analyze Offerings & Positioning",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates Texts P/D": {
+      "main": [
+        [
+          {
+            "node": "Analyze Process & Differentiation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates Texts PoS": {
+      "main": [
+        [
+          {
+            "node": "Analyze Proof Of Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Proof Of Success": {
+      "main": [
+        [
+          {
+            "node": "Clean Company Name.",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pull Lead From Airtable": {
+      "main": [
+        [
+          {
+            "node": "Email Validation - NeverBounce",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LinkedIn Profile Scraper": {
+      "main": [
+        [
+          {
+            "node": "JSON Into Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JSON Into Text": {
+      "main": [
+        [
+          {
+            "node": "Analyze Personal LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Company LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "LinkedIn Profile Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Company Homepage Scraper": {
+      "main": [
+        [
+          {
+            "node": "Remove HTML Homepage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Empty": {
+      "main": [
+        [
+          {
+            "node": "Unable To Scrape Website?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unable To Scrape Website?": {
+      "main": [
+        [
+          {
+            "node": "Clean Company Name",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Filter HTML For URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Personal LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Company Homepage Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "US: Yes or No?": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Lead - Not US",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B2B: Yes or No?": {
+      "main": [
+        [
+          {
+            "node": "Headcount: >5, <30?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Lead - Not B2B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Headcount: >5, <30?": {
+      "main": [
+        [
+          {
+            "node": "Analyze Company LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Lead - Too Big or Small",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LinkedIn Company Scraper": {
+      "main": [
+        [
+          {
+            "node": "Remove HTML LinkedIn Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove HTML LinkedIn Page": {
+      "main": [
+        [
+          {
+            "node": "Analyze Company LinkedIn_",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Validation - NeverBounce": {
+      "main": [
+        [
+          {
+            "node": "Email Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Valid?": {
+      "main": [
+        [
+          {
+            "node": "US: Yes or No?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Lead - No Valid Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "LinkedIn Company Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Company LinkedIn_": {
+      "main": [
+        [
+          {
+            "node": "B2B: Yes or No?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter HTML For URLs": {
+      "main": [
+        [
+          {
+            "node": "Turn X Items Into 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Variables": {
+      "main": [
+        [
+          {
+            "node": "Update Lead W/ Enrichment",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Upload Lead To Instantly",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Variables.": {
+      "main": [
+        [
+          {
+            "node": "Update Lead W/ Enrichment.",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Upload Lead To Instantly.",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Company Name": {
+      "main": [
+        [
+          {
+            "node": "Determine Variables",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Company Name.": {
+      "main": [
+        [
+          {
+            "node": "Determine Variables.",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "9c7b2fd7-67be-4d35-b31e-a25b1294f63f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "be9861782fae15eac6af5bd3da39e0377359813f71b0e0ed19ed3a98eb035f79"
+  },
+  "id": "OmvgR5z47ZRYVUmg",
+  "tags": []
+}

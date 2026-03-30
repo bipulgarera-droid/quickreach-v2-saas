@@ -1821,6 +1821,78 @@ def trigger_send():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/replies', methods=['GET'])
+def list_replies():
+    """List replies from the new replies table, joined with contact names."""
+    try:
+        project_id = request.args.get('project_id')
+        query = supabase.table('replies').select('*, contacts(name)')
+        
+        if project_id:
+            query = query.eq('project_id', project_id)
+            
+        res = query.order('received_at', desc=True).execute()
+        return jsonify(res.data or [])
+    except Exception as e:
+        logger.error(f"Error fetching replies: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/replies/<reply_id>/send', methods=['POST'])
+def send_manual_reply(reply_id):
+    """Send a manual reply to a prospect response."""
+    try:
+        data = request.json or {}
+        reply_body = data.get('body')
+        
+        if not reply_body:
+            return jsonify({'error': 'Reply body is required'}), 400
+            
+        # 1. Get the original reply details
+        reply_res = supabase.table('replies').select('*').eq('id', reply_id).single().execute()
+        if not reply_res.data:
+            return jsonify({'error': 'Reply not found'}), 404
+            
+        parent_reply = reply_res.data
+        
+        # 2. Get the sender account from the pool
+        from execution.smtp_pool import SMTPPool
+        pool = SMTPPool()
+        account = pool.get_account_by_email(parent_reply['recipient_email'])
+        
+        if not account:
+            return jsonify({'error': f"Account {parent_reply['recipient_email']} not found in pool"}), 500
+            
+        # 3. Send the threaded reply
+        subject = parent_reply['subject'] or "Re: Outreach"
+        if not subject.lower().startswith('re:'):
+            subject = f"Re: {subject}"
+            
+        result = pool.send_email(
+            account=account,
+            to_addr=parent_reply['sender_email'],
+            subject=subject,
+            body_html=reply_body,
+            thread_id=parent_reply['thread_id']
+        )
+        
+        if result.get('success'):
+            # 4. Update reply status in DB
+            supabase.table('replies').update({
+                'sent_reply': reply_body,
+                'sent_at': datetime.utcnow().isoformat(),
+                'reply_status': 'sent'
+            }).eq('id', reply_id).execute()
+            
+            return jsonify({'status': 'sent'})
+        else:
+            return jsonify({'error': result.get('error')}), 500
+            
+    except Exception as e:
+        logger.error(f"Manual reply send error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/sequences/check-replies', methods=['POST'])
 def check_replies():
     """Check Gmail inboxes for prospect replies and auto-stop their sequences."""
