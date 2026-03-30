@@ -33,8 +33,10 @@ def _extract_sender_email(from_header: str) -> str:
 def is_bounce(from_addr: str, subject: str) -> bool:
     f = (from_addr or "").lower()
     s = (subject or "").lower()
-    if any(x in f for x in ['mailer-daemon', 'postmaster', 'no-reply@accounts.google.com']): return True
-    if any(x in s for x in ['undeliverable', 'delivery status notification', 'failure', 'returned mail']): return True
+    system_emails = ['mailer-daemon', 'postmaster', 'no-reply@accounts.google.com', 'delivery-reports', 'mta-daemon']
+    bounce_subjects = ['undeliverable', 'delivery status notification', 'failure', 'returned mail', 'address not found', 'could not be delivered', 'rejected']
+    if any(x in f for x in system_emails): return True
+    if any(x in s for x in bounce_subjects): return True
     return False
 
 def check_all_replies(days=7, logger_callback=None):
