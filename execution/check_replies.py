@@ -105,10 +105,18 @@ def _decode_header_value(raw):
 
 
 def _extract_sender_email(from_header: str) -> str:
-    """Extract just the email address from a From: header."""
-    if "<" in from_header and ">" in from_header:
-        return from_header.split("<")[1].split(">")[0].strip().lower()
-    return from_header.strip().lower()
+    """Extract just the email address from a From: header, handling encoded strings."""
+    decoded_from = _decode_header_value(from_header)
+    
+    # Use regex for better precision if possible
+    import re
+    emails = re.findall(r'[\w\.-]+@[\w\.-]+\.\w+', decoded_from)
+    if emails:
+        return emails[0].strip().lower()
+        
+    if "<" in decoded_from and ">" in decoded_from:
+        return decoded_from.split("<")[1].split(">")[0].strip().lower()
+    return decoded_from.strip().lower()
 
 
 def _get_imap_connection(acct_email: str, acct_password: str) -> imaplib.IMAP4_SSL:
