@@ -1,13 +1,15 @@
 import imaplib
 import email
 import os
-import re
-import json
+import logging
 from datetime import datetime, timedelta
 from email.header import decode_header
 from email.utils import parseaddr
 from dotenv import load_dotenv
-from execution.ai_reply_analyzer import analyze_incoming_emails
+from execution.classify_email import classify_email
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # --- CONFIG ---
 IMAP_HOST = "imap.gmail.com"
@@ -27,7 +29,7 @@ def _decode_header_value(raw):
     except: return str(raw)
 
 def _extract_plain_text_snippet(full_msg) -> str:
-    """Extract up to 1000 characters of plain text from the email for Gemini."""
+    """Extract up to 2000 characters of plain text from the email."""
     body = ""
     if full_msg.is_multipart():
         for part in full_msg.walk():
@@ -37,15 +39,25 @@ def _extract_plain_text_snippet(full_msg) -> str:
     else:
         p = full_msg.get_payload(decode=True)
         if p: body = p.decode(errors='ignore')
-    return body.strip()[:1000]
+    return body.strip()[:2000]
 
-def check_all_replies(days=7, logger_callback=None):
-    """Main synchronizer using Gemini AI Analyzer."""
+def check_all_replies(days=7, logger_callback=None, skip_db_update=False):
+    """
+    Deterministic Reply/Bounce Detection Engine.
+    
+    Scans all Gmail sender accounts, classifies every incoming email using
+    pure pattern matching (zero API calls), and updates the database.
+    
+    Args:
+        days: How many days back to scan.
+        logger_callback: Optional function to receive log lines.
+        skip_db_update: If True, only classify but don't write to DB (for testing).
+    """
     def log(m):
         print(m)
         if logger_callback: logger_callback(m)
         
-    log(f"--- Starting AI-Powered Reply Detection for last {days} days ---")
+    log(f"--- Starting Deterministic Reply Detection for last {days} days ---")
     
     # Environment Setup
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -78,30 +90,44 @@ def check_all_replies(days=7, logger_callback=None):
     supabase = create_client(url, key)
     
     log("Building Contact & Subject Maps...")
-    res = supabase.table('contacts').select('id, email, company, project_id').execute()
-    contacts = [c for c in res.data if c is not None] if res.data else []
     
-    prospect_emails = {} # email -> (id, pid, company)
-    for c in contacts:
+    # Load ALL contacts across ALL projects
+    all_contacts = []
+    page = 0
+    page_size = 1000
+    while True:
+        res = supabase.table('contacts').select('id, email, company, project_id').range(page * page_size, (page + 1) * page_size - 1).execute()
+        if not res.data:
+            break
+        all_contacts.extend(res.data)
+        if len(res.data) < page_size:
+            break
+        page += 1
+    
+    prospect_emails = {}  # email -> (contact_id, project_id, company)
+    for c in all_contacts:
         email_val = (c.get('email') or '').lower().strip()
         if email_val:
             prospect_emails[email_val] = (c['id'], c['project_id'], c.get('company', 'Unknown'))
             
-    # Active subject map
-    subject_map = {} # base_subject -> [(contact_id, project_id)]
-    page_size = 1000
-    for i in range(0, 50000, page_size):
-        seq_page = supabase.table('email_sequences').select('contact_id, project_id, subject').range(i, i + page_size - 1).execute()
-        if not seq_page.data: break
+    # Active subject map (campaign subjects -> contact mappings)
+    subject_map = {}  # base_subject -> [(contact_id, project_id)]
+    page = 0
+    while True:
+        seq_page = supabase.table('email_sequences').select('contact_id, project_id, subject').range(page * page_size, (page + 1) * page_size - 1).execute()
+        if not seq_page.data:
+            break
         for s in seq_page.data:
             subj = (s.get('subject') or '').strip().lower()
             if subj:
                 if subj not in subject_map:
                     subject_map[subj] = []
                 subject_map[subj].append((s['contact_id'], s['project_id']))
+        if len(seq_page.data) < page_size:
+            break
+        page += 1
                 
-    campaign_subjects = list(subject_map.keys())
-    log(f"Loaded {len(prospect_emails)} prospect emails and {len(campaign_subjects)} campaign subjects.")
+    log(f"Loaded {len(prospect_emails)} prospect emails and {len(subject_map)} campaign subjects.")
 
     # Get Gmail Accounts
     accounts = []
@@ -114,9 +140,12 @@ def check_all_replies(days=7, logger_callback=None):
         log("No Gmail accounts found in environment")
         return
 
-    stats = {'human_replies': 0, 'bounces': 0, 'auto_replies': 0, 'spam_ignored': 0}
+    stats = {'human_replies': 0, 'bounces': 0, 'auto_replies': 0, 'spam_ignored': 0, 'unmatched_replies': 0, 'unmatched_bounces': 0}
+    
+    # Track already-processed contact IDs this run to avoid duplicate updates
+    processed_contacts = set()
 
-    # Scan Accounts
+    # Scan ALL Accounts
     for acct_email, acct_password in accounts:
         log(f"\nScanning: {acct_email}...")
         try:
@@ -137,125 +166,97 @@ def check_all_replies(days=7, logger_callback=None):
             ids = message_ids[0].split()
             log(f"  Messages: {len(ids)}")
             
-            batch_payload = []
-            
-            # 1. Fetch all emails into a batch
+            # Fetch and classify each email
             for msg_index, msg_id in enumerate(reversed(ids)):
-                # Only check up to 50 recent emails per inbox to save time/tokens if inbox is huge
-                if msg_index > 50: break 
+                if msg_index > 200:  # Safety cap
+                    break
                 
-                res_status, fd = mail.fetch(msg_id, "(RFC822)")
-                if res_status != 'OK' or not fd or not isinstance(fd[0], tuple):
-                    continue
-                    
-                raw_full = fd[0][1]
-                if not raw_full: continue
-                
-                msg_obj = email.message_from_bytes(raw_full)
-                from_hdr = _decode_header_value(msg_obj.get("From", ""))
-                subject_hdr = _decode_header_value(msg_obj.get("Subject", ""))
-                
-                _, sender_email = parseaddr(from_hdr.lower())
-                sender = sender_email.strip()
-                
-                if not sender or sender == acct_email.lower(): continue
-                
-                # Fast Pre-Filter for obvious irrelevant SPAM (skip Gemini to save tokens/time)
-                if sender in ['no-reply@linkedin.com', 'alerts@linkedin.com', 'googlealerts-noreply@google.com']:
-                    stats['spam_ignored'] += 1
-                    continue
-                    
-                body_snippet = _extract_plain_text_snippet(msg_obj)
-                
-                log(f"    [DUMP] From: {sender} | Subj: {subject_hdr[:60]}")
-                
-                batch_payload.append({
-                    "msg_index": msg_index,
-                    "sender": sender,
-                    "subject": subject_hdr,
-                    "body_snippet": body_snippet
-                })
-
-            # 2. Analyze the Batch with Gemini!
-            if batch_payload:
-                log(f"    -> Passing {len(batch_payload)} emails to Gemini AI Analyzer...")
-                ai_results = analyze_incoming_emails(batch_payload, campaign_subjects)
-                
-                # 3. Process the AI Classifications
-                for payload in batch_payload:
-                    idx = str(payload['msg_index'])
-                    if idx not in ai_results: continue
-                    
-                    res = ai_results[idx]
-                    cls = res['classification']
-                    reason = res['reason']
-                    extracted_email = (res.get('extracted_contact_email') or '').lower().strip()
-                    extracted_subject = (res.get('extracted_subject') or '').lower().strip()
-                    sender = payload['sender']
-                    
-                    # Core matching logic
-                    contact_id = None
-                    project_id = None
-                    c_company = "Unknown"
-                    c_email = "Unknown"
-                    
-                    # Tactic 1: Real sender matches our prospect DB
-                    if sender in prospect_emails:
-                        contact_id, project_id, c_company = prospect_emails[sender]
-                        c_email = sender
-                    # Tactic 2: Gemini extracted a failed/forwarded email from the body
-                    elif extracted_email and extracted_email in prospect_emails:
-                        contact_id, project_id, c_company = prospect_emails[extracted_email]
-                        c_email = extracted_email
-                    # Tactic 3: Gemini perfectly matched the original Subject Line 
-                    elif extracted_subject and extracted_subject in subject_map:
-                        candidates = subject_map[extracted_subject]
-                        # Just pick the first candidate if we can't narrow down by domain
-                        # (In reality, subject strings are extremely unique so collisions are rare)
-                        contact_id = candidates[0][0]
-                        project_id = candidates[0][1]
+                try:
+                    res_status, fd = mail.fetch(msg_id, "(RFC822)")
+                    if res_status != 'OK' or not fd or not isinstance(fd[0], tuple):
+                        continue
                         
-                        # Just grab the email for logging
-                        for c in contacts:
-                            if c['id'] == contact_id:
-                                c_email = c['email']
-                                c_company = c.get('company', 'Unknown')
-                                break
-
-                    # Execute DB Updates based on AI Classification
+                    raw_full = fd[0][1]
+                    if not raw_full: continue
+                    
+                    msg_obj = email.message_from_bytes(raw_full)
+                    from_hdr = _decode_header_value(msg_obj.get("From", ""))
+                    subject_hdr = _decode_header_value(msg_obj.get("Subject", ""))
+                    
+                    _, sender_email = parseaddr(from_hdr.lower())
+                    sender = sender_email.strip()
+                    
+                    if not sender or sender == acct_email.lower():
+                        continue
+                    
+                    body_snippet = _extract_plain_text_snippet(msg_obj)
+                    
+                    # === DETERMINISTIC CLASSIFICATION ===
+                    result = classify_email(
+                        sender=sender,
+                        subject=subject_hdr,
+                        body_snippet=body_snippet,
+                        prospect_emails=prospect_emails,
+                        subject_map=subject_map
+                    )
+                    
+                    cls = result['classification']
+                    contact_id = result['matched_contact_id']
+                    project_id = result['matched_project_id']
+                    matched_email = result['matched_email']
+                    matched_company = result['matched_company']
+                    reason = result['reason']
+                    
+                    # === EXECUTE DB UPDATES ===
                     if cls == 'BOUNCE':
                         stats['bounces'] += 1
-                        if contact_id:
-                            log(f"  ✅ [BOUNCE CATCH] Matched Contact: {c_email} | AI Reason: {reason}")
-                            supabase.table('contacts').update({'status': 'bounced'}).eq('id', contact_id).execute()
-                        else:
-                            log(f"  ⚠️ [UNMATCHED BOUNCE] Failed to link bounce to contact. Sender: {sender} | Reason: {reason}")
+                        if contact_id and contact_id not in processed_contacts:
+                            processed_contacts.add(contact_id)
+                            log(f"  ✅ [BOUNCE] {matched_email} ({matched_company}) | {reason}")
+                            if not skip_db_update:
+                                supabase.table('contacts').update({'status': 'bounced'}).eq('id', contact_id).execute()
+                                supabase.table('email_sequences').update({'status': 'cancelled'}).eq('contact_id', contact_id).eq('status', 'pending').execute()
+                        elif not contact_id:
+                            stats['unmatched_bounces'] += 1
+                            log(f"  ⚠️ [UNMATCHED BOUNCE] From: {sender} | Subj: {subject_hdr[:60]} | {reason}")
                             
                     elif cls == 'HUMAN_REPLY':
                         stats['human_replies'] += 1
-                        if contact_id:
-                            log(f"  ✅ [REPLY CATCH] Matched Contact: {c_email} | AI Reason: {reason}")
-                            supabase.table('contacts').update({'status': 'replied'}).eq('id', contact_id).execute()
-                            # Optional: Update sequence status too
-                            supabase.table('email_sequences').update({'status': 'cancelled'}).eq('contact_id', contact_id).eq('status', 'pending').execute()
-                        else:
-                            log(f"  ⚠️ [UNMATCHED REPLY] AI found a human reply but couldn't link it. Sender: {sender} | Reason: {reason}")
+                        if contact_id and contact_id not in processed_contacts:
+                            processed_contacts.add(contact_id)
+                            log(f"  ✅ [REPLY] {matched_email} ({matched_company}) | {reason}")
+                            if not skip_db_update:
+                                supabase.table('contacts').update({'status': 'replied'}).eq('id', contact_id).execute()
+                                supabase.table('email_sequences').update({'status': 'cancelled'}).eq('contact_id', contact_id).eq('status', 'pending').execute()
+                        elif not contact_id:
+                            stats['unmatched_replies'] += 1
+                            log(f"  ⚠️ [UNMATCHED REPLY] From: {sender} | Subj: {subject_hdr[:60]} | {reason}")
                             
                     elif cls == 'AUTO_REPLY':
                         stats['auto_replies'] += 1
-                        log(f"  ⏸️ [AUTO_REPLY IGNORED] {sender} is OOTO. AI Reason: {reason}")
+                        if contact_id:
+                            log(f"  ⏸️ [AUTO_REPLY] {matched_email} ({matched_company}) | {reason}")
+                        else:
+                            log(f"  ⏸️ [AUTO_REPLY] From: {sender} | Subj: {subject_hdr[:60]}")
                     
-                    else: # SPAM / IGNORE
+                    else:  # SPAM
                         stats['spam_ignored'] += 1
-                        # We just ignore these
-                        pass
+                        
+                except Exception as msg_err:
+                    log(f"  ❌ Error processing message: {msg_err}")
+                    continue
+                        
+            mail.logout()
+            
         except Exception as e:
             log(f"Error checking {acct_email}: {e}")
             import traceback
             traceback.print_exc()
 
-    log(f"\n--- AI Detection Complete ---")
-    log(f"Human Replies: {stats['human_replies']} | Bounces: {stats['bounces']} | Auto-Replies: {stats['auto_replies']} | Spam Ignored: {stats['spam_ignored']}")
+    log(f"\n--- Detection Complete ---")
+    log(f"Human Replies: {stats['human_replies']} | Bounces: {stats['bounces']} | Auto-Replies: {stats['auto_replies']}")
+    log(f"Unmatched Replies: {stats['unmatched_replies']} | Unmatched Bounces: {stats['unmatched_bounces']} | Spam Ignored: {stats['spam_ignored']}")
+    log(f"[OK] Reply check complete. Found {stats['human_replies']} replies and {stats['bounces']} bounces.")
     return stats
 
 if __name__ == "__main__":
