@@ -897,7 +897,7 @@ def trigger_manual_verification():
                 chunk_size = 100
                 for i in range(0, len(contact_ids), chunk_size):
                     chunk = contact_ids[i:i + chunk_size]
-                    chunk_res = _sb.table('contacts').select('id, email, enrichment_data').in_('id', chunk).execute()
+                    chunk_res = _sb.table('contacts').select('id, email, company, enrichment_data').in_('id', chunk).execute()
                     if chunk_res.data:
                         all_contacts_data.extend(chunk_res.data)
 

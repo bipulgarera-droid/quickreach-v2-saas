@@ -32,7 +32,7 @@ def verify_risky_contacts_bulk(contacts: list[dict], supabase_client) -> None:
             has_been_checked = 'serper_verified' in ed
             if not has_been_checked:
                 email = c.get('email', '').strip()
-                company = c.get('company_name', '').strip()
+                company = c.get('company', '').strip()
                 if email and '@' in email and company:
                     to_verify.append(c)
                     
@@ -56,7 +56,7 @@ def verify_risky_contacts_bulk(contacts: list[dict], supabase_client) -> None:
         
     for e, contact_list in email_to_contacts.items():
         # Just grab the company text from the first contact mapping
-        comp = contact_list[0].get('company_name', '').strip()
+        comp = contact_list[0].get('company', '').strip()
         emails_to_test.append((e, comp))
     
     logger.info(f"OSINT FALLBACK: Initiating lightning-fast Serper API actor for {len(emails_to_test)} unique queries...")
