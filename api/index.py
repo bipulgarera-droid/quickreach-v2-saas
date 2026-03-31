@@ -943,6 +943,7 @@ def trigger_manual_verification():
                 valid_count = 0
                 skipped_count = 0
                 done_count = 0
+                risky_contacts = []
                 
                 with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
                     futures = {executor.submit(verify_one, c): c for c in to_verify}
@@ -960,11 +961,32 @@ def trigger_manual_verification():
                             else:
                                 valid_count += 1
                                 job.info(f"Verified {email}: VALID")
+                                
+                                # Track risky contacts for OSINT fallback
+                                v_reason = str(enrichment_data.get('verification_reason', ''))
+                                is_strict_risky = v_status == 'risky' or (v_status == 'valid' and 'domain_catch_all' in v_reason)
+                                if is_strict_risky:
+                                    # Create a dict that matches what verify_risky_contacts_bulk expects
+                                    c_obj = next((c for c in to_verify if c['id'] == contact_id), None)
+                                    if c_obj:
+                                        c_obj['enrichment_data'] = enrichment_data
+                                        risky_contacts.append(c_obj)
+                                        
                         except Exception as e:
                             logger.error(f"Verification worker error: {e}")
                             skipped_count += 1
                         finally:
                             done_count += 1
+
+                # === OSINT FALLBACK (SERPER.DEV) ===
+                if risky_contacts:
+                    job.info(f"Running Google OSINT fallback for {len(risky_contacts)} risky leads...")
+                    try:
+                        from execution.serper_fallback import verify_risky_contacts_bulk
+                        verify_risky_contacts_bulk(risky_contacts, _sb)
+                    except Exception as e:
+                        logger.error(f"Failed to run Serper OSINT fallback: {e}")
+                        job.info(f"OSINT fallback failed: {e}")
 
                 job.success(f"Verification complete. Valid: {valid_count}, Skipped: {skipped_count}")
                 job.complete('completed')

@@ -7,21 +7,20 @@ from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
-def verify_risky_emails_bulk(sequences: list[dict], supabase_client) -> None:
+def verify_risky_contacts_bulk(contacts: list[dict], supabase_client) -> None:
     """
-    Extracts all 'risky' emails (including Catch-Alls) from the pending sequences
+    Extracts all 'risky' emails (including Catch-Alls) from the provided contacts
     that haven't been OSINT-verified yet, runs them through Serper.dev Google Search in bulk,
     and updates the contact's enrichment_data with `serper_verified`: True/False.
     """
     to_verify = []
     
-    for seq in sequences:
-        c = seq.get('contacts', {})
+    for c in contacts:
         ed = c.get('enrichment_data') or {}
         if isinstance(ed, str):
             try: ed = json.loads(ed)
             except: ed = {}
-            seq['contacts']['enrichment_data'] = ed
+            c['enrichment_data'] = ed
             
         v_status = ed.get('verification_status')
         v_reason = str(ed.get('verification_reason', ''))
@@ -35,7 +34,7 @@ def verify_risky_emails_bulk(sequences: list[dict], supabase_client) -> None:
                 email = c.get('email', '').strip()
                 company = c.get('company_name', '').strip()
                 if email and '@' in email and company:
-                    to_verify.append(seq)
+                    to_verify.append(c)
                     
     if not to_verify:
         return
@@ -47,19 +46,18 @@ def verify_risky_emails_bulk(sequences: list[dict], supabase_client) -> None:
         logger.error("OSINT FALLBACK: No SERPER_API_KEY found in environment or .env. Skipping deep verification.")
         return
 
-    # Use a dict to map the exact email string we send to Serper back to the sequence objects
-    email_to_seqs = defaultdict(list)
+    # Use a dict to map the exact email string we send to Serper back to the contact objects
+    email_to_contacts = defaultdict(list)
     emails_to_test = []
     
-    for seq in to_verify:
-        email = seq['contacts']['email'].strip()
-        company = seq['contacts']['company_name'].strip()
-        email_to_seqs[email].append(seq)
+    for c in to_verify:
+        email = c['email'].strip()
+        email_to_contacts[email].append(c)
         
-    for e, seqs in email_to_seqs.items():
-        # Just grab the company text from the first seq mapping
-        c = seqs[0]['contacts']['company_name'].strip()
-        emails_to_test.append((e, c))
+    for e, contact_list in email_to_contacts.items():
+        # Just grab the company text from the first contact mapping
+        comp = contact_list[0].get('company_name', '').strip()
+        emails_to_test.append((e, comp))
     
     logger.info(f"OSINT FALLBACK: Initiating lightning-fast Serper API actor for {len(emails_to_test)} unique queries...")
     
@@ -120,7 +118,7 @@ def verify_risky_emails_bulk(sequences: list[dict], supabase_client) -> None:
     newly_verified = 0
     newly_rejected = 0
     
-    for email, seq_list in email_to_seqs.items():
+    for email, contact_list in email_to_contacts.items():
         is_verified = email in verified_emails
         if is_verified:
             newly_verified += 1
@@ -129,9 +127,9 @@ def verify_risky_emails_bulk(sequences: list[dict], supabase_client) -> None:
             newly_rejected += 1
             logger.info(f"  🚫 [OSINT DROPPED] Could not confidently verify {email} on Google.")
             
-        for seq in seq_list:
-            c_id = seq['contact_id']
-            ed = seq['contacts'].get('enrichment_data') or {}
+        for c in contact_list:
+            c_id = c['id']
+            ed = c.get('enrichment_data') or {}
             ed['serper_verified'] = is_verified
             supabase_client.table('contacts').update({'enrichment_data': ed}).eq('id', c_id).execute()
 
@@ -159,12 +157,13 @@ if __name__ == "__main__":
     
     logger.info("Starting standalone OSINT Fallback Verification...")
     
-    # Fetch active sequences
-    seq_res = supabase.table('email_sequences').select('*, contacts!inner(*)').eq('status', 'active').execute()
-    sequences = seq_res.data or []
+    # Fetch some active contacts to test with
+    # E.g. ones that have risky status
+    res = supabase.table('contacts').select('*').limit(50).execute()
+    contacts = res.data or []
     
-    if not sequences:
-        logger.info("No active sequences found.")
+    if not contacts:
+        logger.info("No active contacts found.")
     else:
-        logger.info(f"Found {len(sequences)} active sequences. Running Serper bulk verification...")
-        verify_risky_emails_bulk(sequences, supabase)
+        logger.info(f"Found {len(contacts)} contacts. Running Serper bulk verification on any risky ones...")
+        verify_risky_contacts_bulk(contacts, supabase)

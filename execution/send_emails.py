@@ -101,15 +101,7 @@ def send_pending_emails(limit: int = 600, dry_run: bool = False, project_id: str
         for p in (proj_res.data or []):
             sender_groups[p['id']] = p.get('sender_group', 'all')
             
-    # === OSINT FALLBACK (SERPER.DEV) ===
-    # Because Serper.dev evaluates 300+ leads in < 15 seconds, we can safely run this synchronously!
-    if not dry_run:
-        try:
-            from execution.serper_fallback import verify_risky_emails_bulk
-            verify_risky_emails_bulk(sequences, supabase)
-        except Exception as e:
-            logger.error(f"Failed to run Serper.dev OSINT fallback: {e}")
-            
+
     stats = {'processed': 0, 'sent': 0, 'skipped': 0, 'errors': 0}
     
     for seq in sequences:
