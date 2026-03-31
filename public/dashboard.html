@@ -488,8 +488,10 @@
             ],
             'replies': [
                 { id: 'all-replies', label: 'All Replies' },
+                { id: 'bounced', label: '💥 Bounced' },
                 { id: 'positive', label: 'Positive' },
                 { id: 'question', label: 'Questions' },
+                { id: 'auto_reply', label: 'Auto-Replies' },
                 { id: 'needs_review', label: 'Needs Review' }
             ],
             'snapshot': [
@@ -967,9 +969,12 @@
 
                 // Filtering based on side-tab
                 let filtered = replies;
-                if (currentSideTab === 'positive') filtered = replies.filter(r => r.sentiment === 'positive');
+                if (currentSideTab === 'bounced') filtered = replies.filter(r => r.sentiment === 'bounce');
+                else if (currentSideTab === 'positive') filtered = replies.filter(r => r.sentiment === 'positive');
                 else if (currentSideTab === 'question') filtered = replies.filter(r => r.sentiment === 'question');
+                else if (currentSideTab === 'auto_reply') filtered = replies.filter(r => r.reply_status === 'closed' && r.sentiment !== 'bounce');
                 else if (currentSideTab === 'needs_review') filtered = replies.filter(r => r.reply_status === 'needs_review');
+                else if (currentSideTab === 'all-replies') filtered = replies.filter(r => r.sentiment !== 'bounce'); // All replies = exclude bounces
 
                 area.innerHTML = `
                     <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-xl shadow-black/20">
@@ -977,6 +982,7 @@
                             <thead>
                                 <tr class="bg-gray-900/80 border-b border-gray-800 text-gray-500 text-[10px] uppercase tracking-widest">
                                     <th class="text-left px-5 py-3 font-semibold">Prospect</th>
+                                    <th class="text-left px-5 py-3 font-semibold">Received By</th>
                                     <th class="text-left px-5 py-3 font-semibold">Sentiment</th>
                                     <th class="text-left px-5 py-3 font-semibold">Message & Draft</th>
                                     <th class="text-left px-5 py-3 font-semibold w-32">Received</th>
@@ -993,6 +999,11 @@
                                             </div>
                                             <div class="text-[11px] text-gray-500 font-mono flex items-center gap-2 mt-1">
                                                 <i data-lucide="mail" class="w-2.5 h-2.5 text-gray-600"></i> ${r.sender_email}
+                                            </div>
+                                        </td>
+                                        <td class="px-5 py-4">
+                                            <div class="text-[11px] text-sky-400 font-mono truncate max-w-[160px]" title="${r.recipient_email || ''}">
+                                                ${r.recipient_email ? r.recipient_email.split('@')[0] + '@...' : '—'}
                                             </div>
                                         </td>
                                         <td class="px-5 py-4">
@@ -1032,6 +1043,7 @@
             const colors = {
                 positive: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
                 negative: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+                bounce: 'bg-red-500/10 text-red-400 border-red-500/20',
                 question: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
                 unsubscribe: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
                 neutral: 'bg-gray-800 text-gray-400 border-gray-700'

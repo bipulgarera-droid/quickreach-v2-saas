@@ -216,6 +216,21 @@ def check_all_replies(days=7, logger_callback=None, skip_db_update=False):
                             if not skip_db_update:
                                 supabase.table('contacts').update({'status': 'bounced'}).eq('id', contact_id).execute()
                                 supabase.table('email_sequences').update({'status': 'cancelled'}).eq('contact_id', contact_id).eq('status', 'pending').execute()
+                                # Insert into replies table for dashboard visibility
+                                try:
+                                    supabase.table('replies').insert({
+                                        'contact_id': contact_id,
+                                        'project_id': project_id,
+                                        'sender_email': sender,
+                                        'recipient_email': acct_email,
+                                        'subject': subject_hdr[:200],
+                                        'body': body_snippet[:2000],
+                                        'sentiment': 'bounce',
+                                        'reply_status': 'closed',
+                                        'received_at': datetime.now().isoformat()
+                                    }).execute()
+                                except Exception as insert_err:
+                                    log(f"  ⚠️ Could not insert bounce into replies table: {insert_err}")
                         elif not contact_id:
                             stats['unmatched_bounces'] += 1
                             log(f"  ⚠️ [UNMATCHED BOUNCE] From: {sender} | Subj: {subject_hdr[:60]} | {reason}")
@@ -228,6 +243,21 @@ def check_all_replies(days=7, logger_callback=None, skip_db_update=False):
                             if not skip_db_update:
                                 supabase.table('contacts').update({'status': 'replied'}).eq('id', contact_id).execute()
                                 supabase.table('email_sequences').update({'status': 'cancelled'}).eq('contact_id', contact_id).eq('status', 'pending').execute()
+                                # Insert into replies table for dashboard visibility
+                                try:
+                                    supabase.table('replies').insert({
+                                        'contact_id': contact_id,
+                                        'project_id': project_id,
+                                        'sender_email': sender,
+                                        'recipient_email': acct_email,
+                                        'subject': subject_hdr[:200],
+                                        'body': body_snippet[:2000],
+                                        'sentiment': 'neutral',
+                                        'reply_status': 'needs_review',
+                                        'received_at': datetime.now().isoformat()
+                                    }).execute()
+                                except Exception as insert_err:
+                                    log(f"  ⚠️ Could not insert reply into replies table: {insert_err}")
                         elif not contact_id:
                             stats['unmatched_replies'] += 1
                             log(f"  ⚠️ [UNMATCHED REPLY] From: {sender} | Subj: {subject_hdr[:60]} | {reason}")
@@ -236,6 +266,21 @@ def check_all_replies(days=7, logger_callback=None, skip_db_update=False):
                         stats['auto_replies'] += 1
                         if contact_id:
                             log(f"  ⏸️ [AUTO_REPLY] {matched_email} ({matched_company}) | {reason}")
+                            if not skip_db_update:
+                                try:
+                                    supabase.table('replies').insert({
+                                        'contact_id': contact_id,
+                                        'project_id': project_id,
+                                        'sender_email': sender,
+                                        'recipient_email': acct_email,
+                                        'subject': subject_hdr[:200],
+                                        'body': body_snippet[:2000],
+                                        'sentiment': 'neutral',
+                                        'reply_status': 'closed',
+                                        'received_at': datetime.now().isoformat()
+                                    }).execute()
+                                except Exception as insert_err:
+                                    log(f"  ⚠️ Could not insert auto-reply into replies table: {insert_err}")
                         else:
                             log(f"  ⏸️ [AUTO_REPLY] From: {sender} | Subj: {subject_hdr[:60]}")
                     
