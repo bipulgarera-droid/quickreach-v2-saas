@@ -956,7 +956,7 @@ def trigger_manual_verification():
                                 skipped_count += 1
                             else:
                                 valid_count += 1
-                                job.info(f"Verified {email}: VALID")
+                                job.info(f"Verified {email}: {v_status.upper()}")
                                 
                                 # Track risky contacts for OSINT fallback
                                 v_reason = str(enrichment_data.get('verification_reason', ''))
