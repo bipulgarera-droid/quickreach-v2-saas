@@ -960,7 +960,7 @@ def trigger_manual_verification():
                                 
                                 # Track risky contacts for OSINT fallback
                                 v_reason = str(enrichment_data.get('verification_reason', ''))
-                                is_strict_risky = v_status == 'risky' or (v_status == 'valid' and 'domain_catch_all' in v_reason)
+                                is_strict_risky = v_status == 'risky'
                                 if is_strict_risky:
                                     # Create a dict that matches what verify_risky_contacts_bulk expects
                                     c_obj = next((c for c in to_verify if c['id'] == contact_id), None)
