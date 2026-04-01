@@ -984,18 +984,16 @@ def trigger_manual_verification():
                         finally:
                             done_count += 1
 
-                # === OSINT FALLBACK (SERPER.DEV) ===
-                if risky_contacts:
-                    job.info(f"Running Google OSINT fallback for {len(risky_contacts)} risky leads...")
-                    try:
-                        from execution.serper_fallback import verify_risky_contacts_bulk
-                        osint_recovered, osint_dropped = verify_risky_contacts_bulk(risky_contacts, _sb, job_logger=job)
-                        job.info(f"OSINT complete: ✅ Recovered {osint_recovered} | 🚫 Dropped {osint_dropped}")
-                    except Exception as e:
-                        logger.error(f"Failed to run Serper OSINT fallback: {e}")
-                        job.info(f"OSINT fallback failed: {e}")
-
-                job.success(f"Verification complete. Valid: {valid_count}, Risky: {risky_count}, Skipped: {skipped_count}")
+                # Final status summary
+                summary = f"Verification complete. Total Approved: {valid_count + osint_recovered if 'osint_recovered' in locals() else valid_count}"
+                if 'osint_recovered' in locals():
+                    summary += f" (✅ {valid_count} SMTP + 🛡️ {osint_recovered} OSINT)"
+                if 'osint_dropped' in locals() and osint_dropped > 0:
+                    summary += f" | 🚫 Dropped: {osint_dropped}"
+                if skipped_count > 0:
+                    summary += f" | ⚠️ Skipped: {skipped_count}"
+                
+                job.success(summary)
                 job.complete('completed')
 
             except Exception as e:
