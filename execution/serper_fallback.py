@@ -21,11 +21,10 @@ def _is_exact_email_match(email_lower: str, text: str) -> bool:
     return bool(re.search(pattern, text))
 
 
-def verify_risky_contacts_bulk(contacts: list[dict], supabase_client) -> None:
+def verify_risky_contacts_bulk(contacts: list[dict], supabase_client, job_logger=None) -> tuple[int, int]:
     """
-    Extracts all 'risky' emails from the provided contacts that haven't been
-    OSINT-verified yet, runs them through Serper.dev Google Search in bulk,
-    and updates the contact's enrichment_data with `serper_verified`: True/False.
+    Runs risky emails through Serper.dev Google Search with strict exact-match,
+    updates enrichment_data with serper_verified, and returns (recovered, dropped) counts.
     """
     to_verify = []
     
@@ -40,22 +39,22 @@ def verify_risky_contacts_bulk(contacts: list[dict], supabase_client) -> None:
         
         # Only risky emails need OSINT verification
         if v_status == 'risky':
-            has_been_checked = 'serper_verified' in ed
-            if not has_been_checked:
-                email = c.get('email', '').strip()
-                company = c.get('company', '').strip()
-                if email and '@' in email and company:
-                    to_verify.append(c)
+            email = c.get('email', '').strip()
+            company = c.get('company', '').strip()
+            if email and '@' in email and company:
+                to_verify.append(c)
                     
     if not to_verify:
-        return
+        return 0, 0
 
     logger.info(f"OSINT FALLBACK: Found {len(to_verify)} unverified risky leads. Preparing bulk Serper check...")
 
     serper_key = os.getenv('SERPER_API_KEY')
     if not serper_key:
         logger.error("OSINT FALLBACK: No SERPER_API_KEY found in environment or .env. Skipping deep verification.")
-        return
+        if job_logger:
+            job_logger.info("⚠️ OSINT SKIPPED: No SERPER_API_KEY configured")
+        return 0, 0
 
     # Use a dict to map the exact email string we send to Serper back to the contact objects
     email_to_contacts = defaultdict(list)
@@ -147,8 +146,12 @@ def verify_risky_contacts_bulk(contacts: list[dict], supabase_client) -> None:
         found, snippet = verified_emails.get(email, (False, None))
         if found:
             newly_verified += 1
+            if job_logger:
+                job_logger.info(f"  ✅ OSINT PASS: {email}")
         else:
             newly_rejected += 1
+            if job_logger:
+                job_logger.info(f"  🚫 OSINT FAIL: {email}")
             
         for c in contact_list:
             c_id = c['id']
@@ -159,6 +162,7 @@ def verify_risky_contacts_bulk(contacts: list[dict], supabase_client) -> None:
             supabase_client.table('contacts').update({'enrichment_data': ed}).eq('id', c_id).execute()
 
     logger.info(f"OSINT FALLBACK COMPLETE: ✅ Recovered {newly_verified} | 🚫 Dropped {newly_rejected}.")
+    return newly_verified, newly_rejected
 
 
 if __name__ == "__main__":

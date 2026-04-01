@@ -979,7 +979,8 @@ def trigger_manual_verification():
                     job.info(f"Running Google OSINT fallback for {len(risky_contacts)} risky leads...")
                     try:
                         from execution.serper_fallback import verify_risky_contacts_bulk
-                        verify_risky_contacts_bulk(risky_contacts, _sb)
+                        osint_recovered, osint_dropped = verify_risky_contacts_bulk(risky_contacts, _sb, job_logger=job)
+                        job.info(f"OSINT complete: ✅ Recovered {osint_recovered} | 🚫 Dropped {osint_dropped}")
                     except Exception as e:
                         logger.error(f"Failed to run Serper OSINT fallback: {e}")
                         job.info(f"OSINT fallback failed: {e}")
