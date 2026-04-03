@@ -431,24 +431,44 @@ def list_contacts():
         search = request.args.get('search', '')
         limit = int(request.args.get('limit', 50))
         offset = int(request.args.get('offset', 0))
-        
-        if status == 'REPLIED':
-            query = supabase.table('contacts').select('*, replies(sender_email, body, sentiment, received_at)', count='exact').eq('project_id', project_id)
-        else:
-            query = supabase.table('contacts').select('*', count='exact').eq('project_id', project_id)
+        def build_query():
+            if status == 'REPLIED':
+                q = supabase.table('contacts').select('*, replies(sender_email, body, sentiment, received_at)', count='exact').eq('project_id', project_id)
+            else:
+                q = supabase.table('contacts').select('*', count='exact').eq('project_id', project_id)
+            
+            if status:
+                q = q.eq('status', status)
+            
+            if search:
+                q = q.or_(f"name.ilike.%{search}%,bio.ilike.%{search}%,email.ilike.%{search}%")
+                
+            return q.order('created_at', desc=True)
 
+        all_data = []
+        total_count = 0
+        curr_offset = offset
         
-        if status:
-            query = query.eq('status', status)
-        
-        if search:
-            query = query.or_(f"name.ilike.%{search}%,bio.ilike.%{search}%,email.ilike.%{search}%")
-        
-        result = query.order('created_at', desc=True).range(offset, offset + limit - 1).execute()
+        while len(all_data) < limit:
+            chunk_size = min(limit - len(all_data), 1000)
+            res = build_query().range(curr_offset, curr_offset + chunk_size - 1).execute()
+            
+            if len(all_data) == 0:
+                total_count = res.count or 0
+                
+            chunk_data = res.data or []
+            if not chunk_data:
+                break
+                
+            all_data.extend(chunk_data)
+            curr_offset += len(chunk_data)
+            
+            if len(chunk_data) < chunk_size:
+                break
         
         return jsonify({
-            'contacts': result.data or [],
-            'total': result.count or 0,
+            'contacts': all_data,
+            'total': total_count,
             'limit': limit,
             'offset': offset
         })
@@ -616,61 +636,37 @@ def run_apify_people_search():
     try:
         data = request.json or {}
         project_id = data.get('project_id')
-        
-        # Remove project_id from data so it doesn't get passed to the apify params parser
         params = {k: v for k, v in data.items() if k != 'project_id'}
 
-        if not params.get('contact_job_title'):
-            return jsonify({'error': 'No job titles provided'}), 400
+        if not project_id:
+            return jsonify({'error': 'Project ID is required'}), 400
 
-        # Validate industry if provided
-        allowed_industries = {
-            "information technology & services", "construction", "marketing & advertising", "real estate", "health, wellness & fitness", 
-            "management consulting", "computer software", "internet", "retail", "financial services", "consumer services", 
-            "hospital & health care", "automotive", "restaurants", "education management", "food & beverages", "design", 
-            "hospitality", "accounting", "events services", "nonprofit organization management", "entertainment", 
-            "electrical/electronic manufacturing", "leisure, travel & tourism", "professional training & coaching", 
-            "transportation/trucking/railroad", "law practice", "apparel & fashion", "architecture & planning", 
-            "mechanical or industrial engineering", "insurance", "telecommunications", "human resources", "staffing & recruiting", 
-            "sports", "legal services", "oil & energy", "media production", "machinery", "wholesale", "consumer goods", "music", 
-            "photography", "medical practice", "cosmetics", "environmental services", "graphic design", "business supplies & equipment", 
-            "renewables & environment", "facilities services", "publishing", "food production", "arts & crafts", "building materials", 
-            "civil engineering", "religious institutions", "public relations & communications", "higher education", "printing", "furniture", 
-            "mining & metals", "logistics & supply chain", "research", "pharmaceuticals", "individual & family services", "medical devices", 
-            "civic & social organization", "e-learning", "security & investigations", "chemicals", "government administration", "online media", 
-            "investment management", "farming", "writing & editing", "textiles", "mental health care", "primary/secondary education", 
-            "broadcast media", "biotechnology", "information services", "international trade & development", "motion pictures & film", 
-            "consumer electronics", "banking", "import & export", "industrial automation", "recreational facilities & services", 
-            "performing arts", "utilities", "sporting goods", "fine art", "airlines/aviation", "computer & network security", "maritime", 
-            "luxury goods & jewelry", "veterinary", "venture capital & private equity", "wine & spirits", "plastics", "aviation & aerospace", 
-            "commercial real estate", "computer games", "packaging & containers", "executive office", "computer hardware", "computer networking", 
-            "market research", "outsourcing/offshoring", "program development", "translation & localization", "philanthropy", "public safety", 
-            "alternative medicine", "museums & institutions", "warehousing", "defense & space", "newspapers", "paper & forest products", 
-            "law enforcement", "investment banking", "government relations", "fund-raising", "think tanks", "glass, ceramics & concrete", 
-            "capital markets", "semiconductors", "animation", "political organization", "package/freight delivery", "wireless", 
-            "international affairs", "public policy", "libraries", "gambling & casinos", "railroad manufacture", "ranching", "military", 
-            "fishery", "supermarkets", "dairy", "tobacco", "shipbuilding", "judiciary", "alternative dispute resolution", "nanotechnology", 
-            "agriculture", "legislative office"
-        }
+        job_logger = JobLogger("Apify Leads Search")
         
-        if params.get('company_industry'):
-            industries = [x.strip().lower() for x in params['company_industry'].split(',')]
-            for ind in industries:
-                if ind and ind not in allowed_industries:
-                    return jsonify({'error': f'Invalid industry: "{ind}". Must be an exact match to a LinkedIn standard industry (e.g. "media production", "motion pictures & film", "entertainment"). Please check the exact spelling.'}), 400
-
         def _run():
             try:
                 from execution.apify_leads_finder import run_apify_leads_search
-                total_stats = run_apify_leads_search(params, project_id=project_id)
-                logger.info(f"[ApifyPeopleSearch] Done — {total_stats}")
+                total_stats = run_apify_leads_search(params, project_id=project_id, job_logger=job_logger)
+                if total_stats:
+                    msg = f"Done — {total_stats.get('inserted', 0)} inserted, {total_stats.get('skipped', 0)} skipped."
+                    logger.info(f"[ApifyPeopleSearch] {msg}")
+                    job_logger.complete()
+                else:
+                    job_logger.error("Apify search returned no stats (failed).")
+                    job_logger.complete(status='failed')
             except Exception as e:
                 logger.error(f"Async apify people search error: {e}")
+                job_logger.error(f"Failed: {str(e)}")
+                job_logger.complete(status='failed')
 
-        thread = threading.Thread(target=_run, daemon=True)
+        thread = threading.Thread(target=_run)
         thread.start()
         
-        return jsonify({'success': True, 'message': 'Apify Leads search started in the background.'})
+        return jsonify({
+            'success': True, 
+            'message': 'Apify Leads search started. Monitoring progress in Live Logs.',
+            'job_id': job_logger.job_id
+        })
 
     except Exception as e:
         logger.error(f"Search API error: {e}")
@@ -967,6 +963,10 @@ def trigger_manual_verification():
                                 skipped_count += 1
                             else:
                                 job.info(f"Verified {email}: {v_status.upper()}")
+                                # Save the results to Supabase IMMEDIATELY for SMTP probe
+                                _sb.table('contacts').update({
+                                    'enrichment_data': enrichment_data
+                                }).eq('id', contact_id).execute()
                                 
                                 if v_status == 'risky':
                                     risky_count += 1
@@ -984,11 +984,25 @@ def trigger_manual_verification():
                         finally:
                             done_count += 1
 
+                # === OSINT FALLBACK (SERPER.DEV) ===
+                osint_recovered = 0
+                osint_dropped = 0
+                if risky_contacts:
+                    job.info(f"Running Google OSINT fallback for {len(risky_contacts)} risky leads...")
+                    try:
+                        from execution.serper_fallback import verify_risky_contacts_bulk
+                        osint_recovered, osint_dropped = verify_risky_contacts_bulk(risky_contacts, _sb, job_logger=job)
+                        job.info(f"OSINT complete: ✅ Recovered {osint_recovered} | 🚫 Dropped {osint_dropped}")
+                    except Exception as e:
+                        logger.error(f"Failed to run Serper OSINT fallback: {e}")
+                        job.info(f"OSINT fallback failed: {e}")
+
                 # Final status summary
-                summary = f"Verification complete. Total Approved: {valid_count + osint_recovered if 'osint_recovered' in locals() else valid_count}"
-                if 'osint_recovered' in locals():
+                total_approved = valid_count + osint_recovered
+                summary = f"Verification complete. Total Approved: {total_approved}"
+                if osint_recovered > 0:
                     summary += f" (✅ {valid_count} SMTP + 🛡️ {osint_recovered} OSINT)"
-                if 'osint_dropped' in locals() and osint_dropped > 0:
+                if osint_dropped > 0:
                     summary += f" | 🚫 Dropped: {osint_dropped}"
                 if skipped_count > 0:
                     summary += f" | ⚠️ Skipped: {skipped_count}"
