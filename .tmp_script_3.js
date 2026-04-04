@@ -1,0 +1,4276 @@
+
+        // =========================================================================
+        // STATE
+        // =========================================================================
+        let currentTopTab = 'dashboard';
+        let currentProjectId = localStorage.getItem('currentProjectId') || null;
+
+        // ── Mobile sidebar toggle ──
+        function toggleMobileSidebar() {
+            const sidebar = document.getElementById('mainSidebar');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            sidebar.classList.toggle('sidebar-open');
+            backdrop.classList.toggle('open');
+        }
+
+        /** Copy text to clipboard with feedback */
+        async function copyToClipboard(text, btnElement) {
+            try {
+                await navigator.clipboard.writeText(text);
+                const originalContent = btnElement.innerHTML;
+                btnElement.innerHTML = '<i data-lucide="check" class="w-3 h-3 inline mr-1"></i> Copied!';
+                btnElement.classList.remove('text-gray-500');
+                btnElement.classList.add('text-emerald-400');
+                if (window.lucide) lucide.createIcons();
+
+                setTimeout(() => {
+                    btnElement.innerHTML = originalContent;
+                    btnElement.classList.remove('text-emerald-400');
+                    btnElement.classList.add('text-gray-500');
+                    if (window.lucide) lucide.createIcons();
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy: ', err);
+                showToast('Failed to copy to clipboard');
+            }
+        }
+
+        // API Wrapper to auto-inject project_id
+        async function apiFetch(url, options = {}) {
+            if (!currentProjectId && !url.includes('/api/projects')) {
+                throw new Error("No project selected");
+            }
+
+            const isGet = !options.method || options.method === 'GET';
+            let finalUrl = url;
+
+            // Auto-set Content-Type for non-GET requests
+            if (!isGet && !options.headers) {
+                options.headers = { 'Content-Type': 'application/json' };
+            } else if (!isGet && options.headers && !options.headers['Content-Type']) {
+                options.headers['Content-Type'] = 'application/json';
+            }
+
+            if (currentProjectId) {
+                if (isGet) {
+                    finalUrl += (url.includes('?') ? '&' : '?') + 'project_id=' + currentProjectId;
+                } else {
+                    if (!options.body) {
+                        options.body = JSON.stringify({ project_id: currentProjectId });
+                    } else if (typeof options.body === 'string') {
+                        try {
+                            const bodyObj = JSON.parse(options.body);
+                            bodyObj.project_id = currentProjectId;
+                            options.body = JSON.stringify(bodyObj);
+                        } catch (e) { }
+                    }
+                }
+            }
+            return fetch(finalUrl, options);
+        }
+        let currentSideTab = 'overview';
+        let contactsCache = [];
+        let statsCache = null;
+
+        const TOP_TABS = [
+            { id: 'dashboard', label: 'Dashboard', icon: 'layout-dashboard' },
+            { id: 'replies', label: 'Replies', icon: 'message-circle' },
+            { id: 'snapshot', label: 'Daily Snapshot', icon: 'sun' },
+            { id: 'contacts', label: 'Contacts', icon: 'users' },
+            { id: 'sequences', label: 'Sequences', icon: 'mail' },
+            { id: 'pipeline', label: 'Pipeline', icon: 'git-branch' },
+            { id: 'search', label: 'Search', icon: 'search' },
+            { id: 'templates', label: 'Templates', icon: 'file-text' },
+            { id: 'projects', label: 'Projects', icon: 'folder' },
+            { id: 'logs', label: 'Live Logs', icon: 'terminal' },
+            { id: 'settings', label: 'Settings', icon: 'settings' }
+        ];
+
+        const SIDE_TABS = {
+            'dashboard': [
+                { id: 'overview', label: 'Overview' },
+                { id: 'activity', label: 'Recent Activity' }
+            ],
+            'replies': [
+                { id: 'all-replies', label: 'All Replies' },
+                { id: 'bounced', label: '💥 Bounced' },
+                { id: 'positive', label: 'Positive' },
+                { id: 'question', label: 'Questions' },
+                { id: 'auto_reply', label: 'Auto-Replies' },
+                { id: 'needs_review', label: 'Needs Review' }
+            ],
+            'snapshot': [
+                { id: 'daily', label: 'Today\'s Summary' }
+            ],
+            'contacts': [
+                { id: 'all', label: 'All Contacts' },
+                { id: 'new', label: 'New' },
+                { id: 'enriched', label: 'Enriched' },
+                { id: 'icebreaker_ready', label: 'Icebreaker Ready' },
+                { id: 'in_sequence', label: 'In Sequence' },
+                { id: 'replied', label: 'Replied' },
+                { id: 'bounced', label: 'Bounced' },
+                { id: 'completed', label: 'Completed' }
+            ],
+            'sequences': [
+                { id: 'all-seq', label: 'All Sequences' },
+                { id: 'pending', label: 'Pending' },
+                { id: 'sent', label: 'Sent' },
+                { id: 'replied', label: 'Replied' }
+            ],
+            'pipeline': [
+                { id: 'funnel', label: 'Funnel View' }
+            ],
+            'search': [
+                { id: 'new-search', label: 'New Search' },
+                { id: 'history', label: 'Search History' }
+            ],
+            'templates': [
+                { id: 'drip', label: 'Drip Sequence' }
+            ],
+            'projects': [
+                { id: 'all-projects', label: 'All Projects' }
+            ],
+            'settings': [
+                { id: 'api-keys', label: 'API Keys' },
+                { id: 'gmail', label: 'Gmail OAuth' }
+            ],
+            'logs': [
+                { id: 'active-jobs', label: 'Active Jobs' },
+                { id: 'job-history', label: 'History' }
+            ]
+        };
+
+        // =========================================================================
+        // INIT
+        // =========================================================================
+        async function init() {
+            await loadProjects();
+            buildTopTabs();
+            buildSideTabs();
+            if (currentProjectId) {
+                await loadContent();
+            } else {
+                document.getElementById('contentArea').innerHTML = '<div class="flex items-center justify-center h-full text-gray-500">Please select or create a project first.</div>';
+            }
+            lucide.createIcons();
+
+            // Fetch initial capacity and set up interval
+            fetchSmtpCapacity();
+            setInterval(fetchSmtpCapacity, 60000); // Update every minute
+        }
+
+        async function fetchSmtpCapacity() {
+            try {
+                const res = await fetch('/api/smtp-capacity');
+                if (!res.ok) return;
+                const data = await res.json();
+
+                const textEl = document.getElementById('smtpCapacityText');
+                const barEl = document.getElementById('smtpCapacityBar');
+
+                if (textEl && barEl) {
+                    textEl.textContent = `${data.used} / ${data.limit}`;
+                    const pct = data.limit > 0 ? Math.min(100, (data.used / data.limit) * 100) : 0;
+                    barEl.style.width = `${pct}%`;
+
+                    if (pct > 90) barEl.className = "h-full bg-red-500 transition-all duration-500";
+                    else if (pct > 75) barEl.className = "h-full bg-amber-500 transition-all duration-500";
+                    else barEl.className = "h-full bg-emerald-500 transition-all duration-500";
+                }
+            } catch (e) {
+                console.error("Failed to fetch SMTP capacity", e);
+            }
+        }
+
+        async function loadProjects() {
+            try {
+                const res = await apiFetch('/api/projects');
+                const data = await res.json();
+                const select = document.getElementById('globalProjectSelect');
+
+                if (data.projects && data.projects.length > 0) {
+                    select.innerHTML = data.projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+
+                    // If no current project or invalid, set to first
+                    if (!currentProjectId || !data.projects.find(p => p.id === currentProjectId)) {
+                        currentProjectId = data.projects[0].id;
+                        localStorage.setItem('currentProjectId', currentProjectId);
+                    }
+                    select.value = currentProjectId;
+                } else {
+                    select.innerHTML = '<option value="">No projects found</option>';
+                    currentProjectId = null;
+                }
+            } catch (e) {
+                console.error("Failed to load projects", e);
+            }
+        }
+
+        function changeProject() {
+            const select = document.getElementById('globalProjectSelect');
+            if (select.value) {
+                currentProjectId = select.value;
+                localStorage.setItem('currentProjectId', currentProjectId);
+                loadContent();
+            }
+        }
+
+        function showNewProjectModal() {
+            openModal(`
+                <div class="p-6">
+                    <h2 class="text-xl font-bold text-white mb-4">Create New Project</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">Project Name (e.g. SaaS Founders, Local Dentists)</label>
+                            <input type="text" id="newProjectName" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white outline-none focus:border-violet-500" placeholder="My Outreach Campaign">
+                        </div>
+                        <div class="flex flex-col md:flex-row gap-4 mb-4">
+                            <div class="flex-1">
+                                <label class="block text-sm font-medium text-gray-400 mb-1">NICHE</label>
+                                <input type="text" id="bulk-search-niche" class="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all" placeholder="e.g. production house">
+                            </div>
+                            <div class="flex-1">
+                                <label class="block text-sm font-medium text-gray-400 mb-1">LOCATION (Cmd/Ctrl for multiple)</label>
+                                <select multiple id="bulk-search-location" class="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg px-2 py-2 text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all h-24">
+            <option value="united states">United States</option>
+            <option value="germany">Germany</option>
+            <option value="india">India</option>
+            <option value="united kingdom">United Kingdom</option>
+            <option value="russia">Russia</option>
+            <option value="france">France</option>
+            <option value="china">China</option>
+            <option value="canada">Canada</option>
+            <option value="netherlands">Netherlands</option>
+            <option value="mexico">Mexico</option>
+            <option value="belgium">Belgium</option>
+            <option value="japan">Japan</option>
+            <option value="brazil">Brazil</option>
+            <option value="australia">Australia</option>
+            <option value="poland">Poland</option>
+            <option value="thailand">Thailand</option>
+            <option value="sweden">Sweden</option>
+            <option value="portugal">Portugal</option>
+            <option value="spain">Spain</option>
+            <option value="czech republic">Czech Republic</option>
+            <option value="taiwan">Taiwan</option>
+            <option value="south africa">South Africa</option>
+            <option value="colombia">Colombia</option>
+            <option value="italy">Italy</option>
+            <option value="vietnam">Vietnam</option>
+            <option value="nigeria">Nigeria</option>
+            <option value="singapore">Singapore</option>
+            <option value="hong kong">Hong Kong</option>
+            <option value="ireland">Ireland</option>
+            <option value="israel">Israel</option>
+            <option value="switzerland">Switzerland</option>
+            <option value="turkey">Turkey</option>
+            <option value="romania">Romania</option>
+            <option value="south korea">South Korea</option>
+            <option value="indonesia">Indonesia</option>
+            <option value="united arab emirates">United Arab Emirates</option>
+            <option value="saudi arabia">Saudi Arabia</option>
+            <option value="austria">Austria</option>
+            <option value="philippines">Philippines</option>
+            <option value="peru">Peru</option>
+            <option value="malaysia">Malaysia</option>
+            <option value="argentina">Argentina</option>
+            <option value="ukraine">Ukraine</option>
+            <option value="ghana">Ghana</option>
+            <option value="denmark">Denmark</option>
+            <option value="norway">Norway</option>
+            <option value="finland">Finland</option>
+            <option value="puerto rico">Puerto Rico</option>
+            <option value="qatar">Qatar</option>
+            <option value="macau">Macau</option>
+            <option value="new zealand">New Zealand</option>
+            <option value="hungary">Hungary</option>
+            <option value="luxembourg">Luxembourg</option>
+            <option value="kuwait">Kuwait</option>
+            <option value="egypt">Egypt</option>
+            <option value="slovakia">Slovakia</option>
+            <option value="greece">Greece</option>
+            <option value="kenya">Kenya</option>
+            <option value="bulgaria">Bulgaria</option>
+            <option value="costa rica">Costa Rica</option>
+            <option value="chile">Chile</option>
+            <option value="venezuela">Venezuela</option>
+            <option value="afghanistan">Afghanistan</option>
+            <option value="bangladesh">Bangladesh</option>
+            <option value="malta">Malta</option>
+            <option value="guatemala">Guatemala</option>
+            <option value="pakistan">Pakistan</option>
+            <option value="lithuania">Lithuania</option>
+            <option value="panama">Panama</option>
+            <option value="morocco">Morocco</option>
+            <option value="republic of indonesia">Republic Of Indonesia</option>
+            <option value="uruguay">Uruguay</option>
+            <option value="serbia">Serbia</option>
+            <option value="bolivia">Bolivia</option>
+            <option value="angola">Angola</option>
+            <option value="dominican republic">Dominican Republic</option>
+            <option value="ecuador">Ecuador</option>
+            <option value="oman">Oman</option>
+            <option value="jamaica">Jamaica</option>
+            <option value="zambia">Zambia</option>
+            <option value="lebanon">Lebanon</option>
+            <option value="tanzania">Tanzania</option>
+            <option value="jordan">Jordan</option>
+            <option value="algeria">Algeria</option>
+            <option value="gibraltar">Gibraltar</option>
+            <option value="paraguay">Paraguay</option>
+            <option value="cambodia">Cambodia</option>
+            <option value="uganda">Uganda</option>
+            <option value="mozambique">Mozambique</option>
+            <option value="ethiopia">Ethiopia</option>
+            <option value="belarus">Belarus</option>
+            <option value="republic of the union of myanmar">Republic Of The Union Of Myanmar</option>
+            <option value="croatia">Croatia</option>
+            <option value="jersey">Jersey</option>
+            <option value="iraq">Iraq</option>
+            <option value="isle of man">Isle Of Man</option>
+            <option value="el salvador">El Salvador</option>
+            <option value="estonia">Estonia</option>
+            <option value="latvia">Latvia</option>
+            <option value="côte d'ivoire">Côte D'Ivoire</option>
+            <option value="tunisia">Tunisia</option>
+            <option value="sierra leone">Sierra Leone</option>
+            <option value="senegal">Senegal</option>
+            <option value="sri lanka">Sri Lanka</option>
+            <option value="cyprus">Cyprus</option>
+            <option value="kazakhstan">Kazakhstan</option>
+            <option value="guernsey">Guernsey</option>
+            <option value="bermuda">Bermuda</option>
+            <option value="mali">Mali</option>
+            <option value="honduras">Honduras</option>
+            <option value="bahrain">Bahrain</option>
+            <option value="slovenia">Slovenia</option>
+            <option value="papua new guinea">Papua New Guinea</option>
+            <option value="iceland">Iceland</option>
+            <option value="mauritius">Mauritius</option>
+            <option value="iran">Iran</option>
+            <option value="niger">Niger</option>
+            <option value="rwanda">Rwanda</option>
+            <option value="moldova">Moldova</option>
+            <option value="democratic republic of the congo">Democratic Republic Of The Congo</option>
+            <option value="liechtenstein">Liechtenstein</option>
+            <option value="fiji">Fiji</option>
+            <option value="kyrgyzstan">Kyrgyzstan</option>
+            <option value="azerbaijan">Azerbaijan</option>
+            <option value="madagascar">Madagascar</option>
+            <option value="trinidad and tobago">Trinidad And Tobago</option>
+            <option value="lesotho">Lesotho</option>
+            <option value="nicaragua">Nicaragua</option>
+            <option value="cameroon">Cameroon</option>
+            <option value="barbados">Barbados</option>
+            <option value="armenia">Armenia</option>
+            <option value="haiti">Haiti</option>
+            <option value="maldives">Maldives</option>
+            <option value="guam">Guam</option>
+            <option value="laos">Laos</option>
+            <option value="nepal">Nepal</option>
+            <option value="brunei">Brunei</option>
+            <option value="reunion">Reunion</option>
+            <option value="macedonia (fyrom)">Macedonia (Fyrom)</option>
+            <option value="swaziland">Swaziland</option>
+            <option value="liberia">Liberia</option>
+            <option value="uzbekistan">Uzbekistan</option>
+            <option value="sudan">Sudan</option>
+            <option value="anguilla">Anguilla</option>
+            <option value="cuba">Cuba</option>
+            <option value="cayman islands">Cayman Islands</option>
+            <option value="seychelles">Seychelles</option>
+            <option value="saint kitts and nevis">Saint Kitts And Nevis</option>
+            <option value="suriname">Suriname</option>
+            <option value="bosnia and herzegovina">Bosnia And Herzegovina</option>
+            <option value="malawi">Malawi</option>
+            <option value="the bahamas">The Bahamas</option>
+            <option value="botswana">Botswana</option>
+            <option value="syria">Syria</option>
+            <option value="burundi">Burundi</option>
+            <option value="guadeloupe">Guadeloupe</option>
+            <option value="namibia">Namibia</option>
+            <option value="burkina faso">Burkina Faso</option>
+            <option value="somalia">Somalia</option>
+            <option value="greenland">Greenland</option>
+            <option value="equatorial guinea">Equatorial Guinea</option>
+            <option value="chad">Chad</option>
+            <option value="monaco">Monaco</option>
+            <option value="republic of the congo">Republic Of The Congo</option>
+            <option value="u.s. virgin islands">U.S. Virgin Islands</option>
+            <option value="mayotte">Mayotte</option>
+            <option value="french polynesia">French Polynesia</option>
+            <option value="french guiana">French Guiana</option>
+            <option value="andorra">Andorra</option>
+            <option value="new caledonia">New Caledonia</option>
+            <option value="central african republic">Central African Republic</option>
+            <option value="myanmar (burma)">Myanmar (Burma)</option>
+            <option value="belize">Belize</option>
+            <option value="aland islands">Aland Islands</option>
+            <option value="solomon islands">Solomon Islands</option>
+            <option value="kosovo">Kosovo</option>
+            <option value="gabon">Gabon</option>
+            <option value="benin">Benin</option>
+            <option value="bonaire, sint eustatius and saba">Bonaire, Sint Eustatius And Saba</option>
+            <option value="martinique">Martinique</option>
+            <option value="tonga">Tonga</option>
+            <option value="south sudan">South Sudan</option>
+            <option value="cook islands">Cook Islands</option>
+            <option value="georgia">Georgia</option>
+            <option value="mauritania">Mauritania</option>
+            <option value="turkmenistan">Turkmenistan</option>
+            <option value="libya">Libya</option>
+            <option value="falkland islands (islas malvinas)">Falkland Islands (Islas Malvinas)</option>
+            <option value="bhutan">Bhutan</option>
+            <option value="tajikistan">Tajikistan</option>
+            <option value="northern mariana islands">Northern Mariana Islands</option>
+            <option value="western sahara">Western Sahara</option>
+            <option value="guyana">Guyana</option>
+            <option value="dominica">Dominica</option>
+            <option value="vanuatu">Vanuatu</option>
+            <option value="kiribati">Kiribati</option>
+            <option value="togo">Togo</option>
+            <option value="nauru">Nauru</option>
+            <option value="samoa">Samoa</option>
+            <option value="mongolia">Mongolia</option>
+            <option value="myanmar">Myanmar</option>
+            <option value="yemen">Yemen</option>
+            <option value="albania">Albania</option>
+            <option value="montenegro">Montenegro</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">Project Description & Pitch</label>
+                            <p class="text-xs text-violet-400 mb-2">Gemini AI will use this to automatically craft your initial campaign templates.</p>
+                            <textarea id="newProjectDesc" rows="3" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white outline-none focus:border-violet-500 resize-y" placeholder="e.g. We are ABC.com matching CEOs with SaaS tools..."></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">Custom Sequence Instructions (Optional)</label>
+                            <p class="text-xs text-emerald-400 mb-2">Instructions like "Step 1 should be about X" or "Tone should be aggressive". This overrides defaults.</p>
+                            <textarea id="newProjectCustomInstructions" rows="3" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white outline-none focus:border-emerald-500 resize-y" placeholder="e.g. Step 1 must mention how we save companies $10k/year..."></textarea>
+                        </div>
+                    </div>
+                    <div class="mt-6 flex gap-3">
+                        <button onclick="closeModal()" class="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 rounded-lg transition-colors">Cancel</button>
+                        <button onclick="createProject()" id="btnCreateProject" class="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-medium py-2 rounded-lg transition-colors shadow-lg">
+                            <span id="createProjectText">Create & Generate</span>
+                        </button>
+                    </div>
+                </div>
+            `);
+        }
+
+        async function createProject() {
+            const name = document.getElementById('newProjectName').value.trim();
+            const desc = document.getElementById('newProjectDesc').value.trim();
+            const custom = document.getElementById('newProjectCustomInstructions').value.trim();
+            const niche = document.getElementById('bulk-search-niche').value.trim();
+            const locEl1 = document.getElementById('bulk-search-location');
+            const location = locEl1 ? Array.from(locEl1.selectedOptions).map(o => o.value).join(', ') : '';
+
+            if (!name) return alert('Enter a project name');
+
+            const btnText = document.getElementById('createProjectText');
+            if (btnText) btnText.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-2"></i> Generating Templates...';
+            if (window.lucide) window.lucide.createIcons();
+
+            try {
+                // Direct fetch since apiFetch injects project_id which we might not have yet
+                const res = await fetch('/api/projects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, description: desc, custom_instructions: custom, niche, location })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                currentProjectId = data.project.id;
+                localStorage.setItem('currentProjectId', currentProjectId);
+
+                closeModal();
+                await loadProjects();
+                await loadContent();
+                showToast('🚀 Project created + AI Templates Generatated! Check Templates tab.');
+            } catch (e) {
+                alert('Error: ' + e.message);
+                if (btnText) btnText.innerText = 'Create & Generate';
+            }
+        }
+
+        // =========================================================================
+        // NAV
+        // =========================================================================
+        function buildTopTabs() {
+            const c = document.getElementById('topTabs');
+            c.innerHTML = TOP_TABS.map(t => `
+                <button onclick="switchTopTab('${t.id}')"
+                    class="top-tab flex items-center gap-1.5 text-sm text-gray-400 transition-colors ${t.id === currentTopTab ? 'active' : ''}">
+                    <i data-lucide="${t.icon}" class="w-4 h-4"></i> ${t.label}
+                </button>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function buildSideTabs() {
+            const c = document.getElementById('sideTabs');
+            const tabs = SIDE_TABS[currentTopTab] || [];
+            document.getElementById('sidebarTitle').textContent = TOP_TABS.find(t => t.id === currentTopTab)?.label || '';
+
+            // On mobile: also render top-level tabs in the sidebar so users can navigate
+            const isMobile = window.innerWidth <= 768;
+            let topTabsHtml = '';
+            if (isMobile) {
+                topTabsHtml = `
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider px-2 pt-2 pb-1">Sections</p>
+                    ${TOP_TABS.map(t => `
+                        <button onclick="switchTopTab('${t.id}'); toggleMobileSidebar();"
+                            class="side-tab w-full text-left text-sm text-gray-400 rounded transition-colors flex items-center gap-2 ${t.id === currentTopTab ? 'active' : ''}">
+                            <i data-lucide="${t.icon}" class="w-4 h-4"></i> ${t.label}
+                        </button>
+                    `).join('')}
+                    <div class="border-t border-gray-800 my-2"></div>
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider px-2 pb-1">Views</p>
+                `;
+            }
+
+            c.innerHTML = topTabsHtml + tabs.map(t => `
+                <button onclick="switchSideTab('${t.id}')${isMobile ? '; toggleMobileSidebar()' : ''}"
+                    class="side-tab w-full text-left text-sm text-gray-400 rounded transition-colors ${t.id === currentSideTab ? 'active' : ''}">
+                    ${t.label}
+                </button>
+            `).join('');
+            if (isMobile && window.lucide) lucide.createIcons();
+        }
+
+        function switchTopTab(id) {
+            currentTopTab = id;
+            currentSideTab = SIDE_TABS[id]?.[0]?.id || 'overview';
+            buildTopTabs(); buildSideTabs(); loadContent();
+        }
+
+        function switchSideTab(id) {
+            currentSideTab = id;
+            buildSideTabs(); loadContent();
+        }
+
+        // =========================================================================
+        // CONTENT
+        // =========================================================================
+        async function loadContent() {
+            const area = document.getElementById('contentArea');
+            const title = document.getElementById('pageTitle');
+            const actions = document.getElementById('pageActions');
+            area.innerHTML = `<div class="flex items-center justify-center h-32 text-gray-500"><i data-lucide="loader-2" class="w-5 h-5 animate-spin mr-2"></i> Loading...</div>`;
+            lucide.createIcons();
+
+            const tab = TOP_TABS.find(t => t.id === currentTopTab);
+            const side = SIDE_TABS[currentTopTab]?.find(t => t.id === currentSideTab);
+            title.textContent = side?.label || tab?.label || 'Dashboard';
+            actions.innerHTML = '';
+
+            try {
+                if (currentTopTab === 'dashboard') await loadDashboard(area, actions);
+                else if (currentTopTab === 'replies') await loadReplies(area, actions);
+                else if (currentTopTab === 'snapshot') await loadSnapshot(area, actions);
+                else if (currentTopTab === 'contacts') await loadContacts(area, actions);
+                else if (currentTopTab === 'sequences') await loadSequences(area, actions);
+                else if (currentTopTab === 'pipeline') await loadPipeline(area);
+                else if (currentTopTab === 'search') await loadSearch(area, actions);
+                else if (currentTopTab === 'templates') await loadTemplates(area);
+                else if (currentTopTab === 'projects') await loadProjectsTab(area);
+                else if (currentTopTab === 'logs') await loadLiveLogs(area, actions);
+                else if (currentTopTab === 'settings') loadSettings(area);
+            } catch (e) {
+                area.innerHTML = `<div class="text-red-400 p-4">Error: ${e.message}</div>`;
+            }
+
+            lucide.createIcons();
+        }
+
+        // =========================================================================
+        // DASHBOARD
+        // =========================================================================
+        async function loadDashboard(area, actions) {
+            const res = await apiFetch('/api/dashboard/stats');
+            const stats = await res.json();
+            statsCache = stats;
+
+            if (currentSideTab === 'overview') {
+                const c = stats.contacts || {};
+                const e = stats.emails || {};
+                area.innerHTML = `
+                    <div class="grid grid-cols-4 gap-4 mb-6">
+                        ${statCard('users', 'blue', c.total, 'Total Contacts')}
+                        ${statCard('sparkles', 'yellow', c.enriched + c.icebreaker_ready, 'Enriched')}
+                        ${statCard('mail', 'violet', e.sent, 'Emails Sent')}
+                        ${statCard('message-circle', 'emerald', e.replied, 'Replies')}
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                            <h3 class="text-sm font-semibold text-white mb-4">Contact Pipeline</h3>
+                            ${pipelineBar(c)}
+                        </div>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                            <h3 class="text-sm font-semibold text-white mb-4">Email Performance</h3>
+                            ${emailPerfBar(e)}
+                        </div>
+                    </div>
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl">
+                        <div class="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+                            <h3 class="text-sm font-semibold text-white">Quick Actions</h3>
+                        </div>
+                        <div class="p-4 grid grid-cols-4 gap-3">
+                            ${actionBtn('search', 'Search Google', 'showSearchModal()')}
+                            ${actionBtn('sparkles', 'Enrich Contacts', 'runEnrichment()')}
+                            ${actionBtn('message-square', 'Gen Icebreakers', 'runIcebreakers()')}
+                            ${actionBtn('send', 'Send Emails', 'runSendEmails()')}
+                            ${actionBtn('eraser', 'Name & Biz Cleaner', 'runCleanup()')}
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Activity tab - show recent contacts
+                const cRes = await apiFetch('/api/contacts?limit=10');
+                const contacts = await cRes.json();
+                area.innerHTML = `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl">
+                        <div class="px-4 py-3 border-b border-gray-800">
+                            <h3 class="text-sm font-semibold text-white">Recent Contacts</h3>
+                        </div>
+                        <div class="divide-y divide-gray-800">
+                            ${(contacts.contacts || []).map(c => `
+                                <div class="px-4 py-3 flex items-center justify-between hover:bg-gray-800/30">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 flex items-center justify-center text-white text-xs font-bold">
+                                            ${(c.name || '?')[0].toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <p class="text-sm font-medium text-white">${c.name}</p>
+                                            <p class="text-xs text-gray-400 truncate max-w-[300px]">${c.bio || 'No bio'}</p>
+                                        </div>
+                                    </div>
+                                    <span class="status-${c.status} text-xs px-2 py-1 rounded-full">${c.status}</span>
+                                </div>
+                            `).join('') || '<p class="px-4 py-8 text-center text-gray-500">No contacts yet. Run a search to get started!</p>'}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // =========================================================================
+        // DAILY SNAPSHOT
+        // =========================================================================
+        async function loadSnapshot(area, actions) {
+            area.innerHTML = `<div class="flex justify-center mt-10"><i data-lucide="loader-2" class="w-6 h-6 animate-spin text-gray-400"></i></div>`;
+            lucide.createIcons();
+
+            try {
+                const res = await apiFetch('/api/dashboard/daily-snapshot');
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                const projects = data.projects || [];
+                const total = data.total_pending || 0;
+
+                actions.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-400 bg-gray-800 px-2 py-1 rounded">Pending Total: ${total}</span>
+                    </div>
+                `;
+
+                if (projects.length === 0) {
+                    area.innerHTML = `<div class="flex flex-col items-center justify-center mt-20 text-gray-500"><i data-lucide="check-circle" class="w-10 h-10 mb-3 text-emerald-600"></i><p class="text-sm">You're all caught up! No pending tasks for today.</p></div>`;
+                    lucide.createIcons();
+                    return;
+                }
+
+                area.innerHTML = projects.map(project => `
+                    <div class="mb-6">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="text-xs font-bold uppercase tracking-widest text-gray-500">${project.name}</span>
+                            <span class="text-xs bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">${project.steps.length} tasks</span>
+                        </div>
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="border-b border-gray-800 text-gray-500 text-xs">
+                                        <th class="text-left px-4 py-2 font-medium">Contact</th>
+                                        <th class="text-left px-4 py-2 font-medium">Instagram</th>
+                                        <th class="text-left px-4 py-2 font-medium">Step</th>
+                                        <th class="text-left px-4 py-2 font-medium">Scheduled</th>
+                                        <th class="text-left px-4 py-2 font-medium">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${project.steps.map((s, i) => `
+                                    <tr id="snap-row-${s.id}" class="border-b border-gray-800/50 last:border-0 hover:bg-gray-800/30 cursor-pointer" onclick="toggleSnapshotBody('${s.id}')">
+                                        <td class="px-4 py-3">
+                                            <div class="font-medium text-white">${s.contact_name || '—'}</div>
+                                            <div class="text-xs text-gray-500">${s.contact_email || '—'}</div>
+                                        </td>
+                                        <td class="px-4 py-3" onclick="event.stopPropagation()">
+                                            ${s.ig_url
+                        ? `<a href="${s.ig_url}" target="_blank" class="text-pink-400 hover:text-pink-300 text-xs font-medium flex items-center gap-1 hover:underline"><i data-lucide="instagram" class="w-3.5 h-3.5"></i> @${s.clean_ig}</a>`
+                        : '<span class="text-gray-600 text-xs">—</span>'
+                    }
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <div class="text-gray-300 font-medium">${s.subject || '—'}</div>
+                                            <div class="text-xs text-gray-500">Step ${s.step_number || i + 1}</div>
+                                            <div id="snap-body-${s.id}" class="hidden mt-2 p-3 bg-gray-950/80 border border-gray-800 rounded-lg group relative">
+                                                <div id="body-text-${s.id}" class="text-xs text-gray-400 whitespace-pre-wrap leading-relaxed">${s.body || 'No message content'}</div>
+                                                <button onclick="event.stopPropagation(); const text = document.getElementById('body-text-${s.id}').innerText; copyToClipboard(text, this)" 
+                                                    class="absolute top-2 right-2 p-1.5 bg-gray-900 border border-gray-700 rounded-md text-gray-500 hover:text-white hover:border-gray-500 transition-all flex items-center gap-1 shadow-sm">
+                                                    <i data-lucide="copy" class="w-3 h-3"></i>
+                                                    <span class="text-[10px]">Copy</span>
+                                                </button>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 whitespace-nowrap">
+                                            ${s.is_overdue
+                        ? `<span class="text-xs bg-red-900/40 text-red-400 px-2 py-0.5 rounded-full border border-red-900/50 mr-1">Overdue</span>`
+                        : `<span class="text-xs bg-sky-900/30 text-sky-400 px-2 py-0.5 rounded-full border border-sky-900/40 mr-1">Today</span>`
+                    }
+                                            <span class="text-xs text-gray-500">${s.scheduled_at ? s.scheduled_at.split('T')[0] : ''}</span>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <div class="flex gap-1 flex-wrap" onclick="event.stopPropagation()">
+                                                ${(_snapManualStates[s.id] = s.manual_channel || "", "")}
+                                                ${s.contact_email ? `<button id="btn-email-${s.id}" onclick="toggleChannelDone('${s.id}', 'email', this)" class="${getChannelBtnClass(s.manual_channel, 'email')}">✉ Email</button>` : ''}
+                                                ${s.clean_phone ? `<a href="https://wa.me/${s.clean_phone}" target="_blank" onclick="event.stopPropagation()" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded hover:bg-emerald-900/40 hover:text-emerald-300 transition-colors">📱 WA</a>` : ''}
+                                                <button id="btn-wa-${s.id}" onclick="toggleChannelDone('${s.id}', 'wa', this)" class="${getChannelBtnClass(s.manual_channel, 'wa')}">✓ WA Done</button>
+                                                ${s.ig_url ? `<a href="${s.ig_url}" target="_blank" onclick="event.stopPropagation()" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded hover:bg-pink-900/40 hover:text-pink-300 transition-colors">📷 IG</a>` : ''}
+                                                <button id="btn-ig-${s.id}" onclick="toggleChannelDone('${s.id}', 'ig', this)" class="${getChannelBtnClass(s.manual_channel, 'ig')}">✓ IG Done</button>
+                                                <button onclick="markSnapshotDone('${s.id}', 'sent', null, this)" class="text-xs px-4 py-1 bg-violet-600 hover:bg-violet-500 text-white border border-violet-500 rounded font-medium shadow-sm transition-all">Finish Task</button>
+                                                <button onclick="markSnapshotDone('${s.id}', 'replied', null, this)" class="text-xs px-2 py-1 bg-gray-800 text-amber-600 border border-gray-700 rounded hover:bg-amber-900/40 hover:text-amber-400 transition-colors ml-2">↩ Replied</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `).join('');
+
+                lucide.createIcons();
+            } catch (e) {
+                area.innerHTML = `<div class="text-red-400 p-4">Error loading snapshot: ${e.message}</div>`;
+            }
+        }
+
+        // =========================================================================
+        // REPLIES
+        // =========================================================================
+        async function loadReplies(area, actions) {
+            area.innerHTML = `<div class="flex justify-center mt-10"><i data-lucide="loader-2" class="w-6 h-6 animate-spin text-gray-400"></i></div>`;
+            lucide.createIcons();
+
+            try {
+                const res = await apiFetch('/api/replies');
+                const replies = await res.json();
+
+                if (replies.length === 0) {
+                    area.innerHTML = `<div class="flex flex-col items-center justify-center mt-20 text-gray-500"><i data-lucide="message-square" class="w-10 h-10 mb-3 opacity-20"></i><p class="text-sm">No replies detected yet. Keep sending!</p></div>`;
+                    lucide.createIcons();
+                    return;
+                }
+
+                // Filtering based on side-tab
+                let filtered = replies;
+                if (currentSideTab === 'bounced') filtered = replies.filter(r => r.sentiment === 'bounce');
+                else if (currentSideTab === 'positive') filtered = replies.filter(r => r.sentiment === 'positive');
+                else if (currentSideTab === 'question') filtered = replies.filter(r => r.sentiment === 'question');
+                else if (currentSideTab === 'auto_reply') filtered = replies.filter(r => r.reply_status === 'closed' && r.sentiment !== 'bounce');
+                else if (currentSideTab === 'needs_review') filtered = replies.filter(r => r.reply_status === 'needs_review');
+                else if (currentSideTab === 'all-replies') filtered = replies.filter(r => r.sentiment !== 'bounce'); // All replies = exclude bounces
+
+                area.innerHTML = `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-xl shadow-black/20">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="bg-gray-900/80 border-b border-gray-800 text-gray-500 text-[10px] uppercase tracking-widest">
+                                    <th class="text-left px-5 py-3 font-semibold">Prospect</th>
+                                    <th class="text-left px-5 py-3 font-semibold">Received By</th>
+                                    <th class="text-left px-5 py-3 font-semibold">Sentiment</th>
+                                    <th class="text-left px-5 py-3 font-semibold">Message & Draft</th>
+                                    <th class="text-left px-5 py-3 font-semibold w-32">Received</th>
+                                    <th class="text-right px-5 py-3 font-semibold">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-800/50">
+                                ${filtered.map(r => `
+                                    <tr class="hover:bg-gray-800/40 transition-all duration-200 group">
+                                        <td class="px-5 py-4">
+                                            <div class="font-semibold text-white group-hover:text-violet-400 transition-colors flex items-center gap-2">
+                                                ${r.contacts?.name || 'Unknown'}
+                                                ${r.status === 'needs_review' ? '<span class="text-[9px] bg-amber-500/20 text-amber-500 border border-amber-500/30 px-1.5 py-0.5 rounded-full uppercase font-bold tracking-tighter">Needs Review</span>' : ''}
+                                            </div>
+                                            <div class="text-[11px] text-gray-500 font-mono flex items-center gap-2 mt-1">
+                                                <i data-lucide="mail" class="w-2.5 h-2.5 text-gray-600"></i> ${r.sender_email}
+                                            </div>
+                                        </td>
+                                        <td class="px-5 py-4">
+                                            <div class="text-[11px] text-sky-400 font-mono truncate max-w-[160px]" title="${r.recipient_email || ''}">
+                                                ${r.recipient_email ? r.recipient_email.split('@')[0] + '@...' : '—'}
+                                            </div>
+                                        </td>
+                                        <td class="px-5 py-4">
+                                            ${sentimentBadge(r.sentiment)}
+                                        </td>
+                                        <td class="px-5 py-4 max-w-lg">
+                                            <div class="text-gray-400 line-clamp-1 text-[11px] italic mb-1">"${(r.body || '(No body)').replace(/</g, '&lt;').replace(/>/g, '&gt;')}"</div>
+                                            ${r.draft_reply ? `
+                                                <div class="text-[10px] text-violet-400 bg-violet-600/10 border border-violet-500/20 px-2 py-1 rounded mt-1 line-clamp-1">
+                                                    <span class="font-bold uppercase tracking-tight mr-1">AI Draft:</span> ${(r.draft_reply || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+                                                </div>
+                                            ` : ''}
+                                        </td>
+                                        <td class="px-5 py-4 text-gray-500 text-[11px]">
+                                            ${new Date(r.received_at).toLocaleDateString()}
+                                            <div class="text-[10px] opacity-40 mt-0.5">${new Date(r.received_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                        </td>
+                                        <td class="px-5 py-4 text-right">
+                                            <button onclick="showReplyModal('${r.id}')" class="text-[11px] font-bold bg-violet-600/10 hover:bg-violet-600 text-violet-400 hover:text-white px-3.5 py-1.5 rounded-lg border border-violet-600/30 transition-all duration-200">
+                                                VIEW & REPLY
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+                lucide.createIcons();
+            } catch (e) {
+                area.innerHTML = `<div class="text-red-400 p-4">Error loading replies: ${e.message}</div>`;
+            }
+        }
+
+        function sentimentBadge(s) {
+            const colors = {
+                positive: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                negative: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+                bounce: 'bg-red-500/10 text-red-400 border-red-500/20',
+                question: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
+                unsubscribe: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+                neutral: 'bg-gray-800 text-gray-400 border-gray-700'
+            };
+            return `<span class="text-[9px] px-2.5 py-0.5 rounded-full border ${colors[s] || colors.neutral} uppercase font-black tracking-tighter">${s || 'unknown'}</span>`;
+        }
+
+        async function showReplyModal(replyId) {
+            openModal(`<div class="p-20 text-center"><i data-lucide="loader-2" class="w-6 h-6 animate-spin mx-auto mb-2 text-violet-500"></i><p class="text-xs text-gray-500">Pulling conversation...</p></div>`);
+            lucide.createIcons();
+
+            try {
+                const res = await apiFetch('/api/replies');
+                const all = await res.json();
+                const r = all.find(x => x.id === replyId);
+
+                if (!r) return closeModal();
+
+                openModal(`
+                    <div class="p-7 max-w-2xl mx-auto">
+                        <div class="flex items-center justify-between mb-8">
+                            <div>
+                                <h2 class="text-2xl font-black text-white tracking-tight">${r.contacts?.name || 'Prospect'}</h2>
+                                <p class="text-xs font-mono text-gray-500 mt-0.5">${r.sender_email}</p>
+                            </div>
+                            <div class="text-right">
+                                ${sentimentBadge(r.sentiment)}
+                                <p class="text-[10px] text-gray-600 mt-2">THREAD ID: ${r.thread_id || 'LOCAL'}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-6 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar mb-8">
+                            <div class="bg-gray-800/40 rounded-2xl p-5 border border-gray-800 shadow-inner">
+                                <div class="flex items-center gap-2 mb-3">
+                                    <div class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                                    <span class="text-[10px] text-gray-500 uppercase font-black tracking-widest">Incoming Message</span>
+                                </div>
+                                <div class="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed font-medium">${r.body}</div>
+                            </div>
+
+                            ${r.sent_reply ? `
+                                <div class="bg-violet-600/5 rounded-2xl p-5 border border-violet-600/20 shadow-inner">
+                                    <div class="flex items-center gap-2 mb-3">
+                                        <div class="w-1.5 h-1.5 rounded-full bg-violet-500"></div>
+                                        <span class="text-[10px] text-violet-400 uppercase font-black tracking-widest">Your Outgoing Reply</span>
+                                    </div>
+                                    <div class="text-sm text-violet-100 whitespace-pre-wrap leading-relaxed font-medium">${r.sent_reply}</div>
+                                    <div class="text-[9px] text-violet-500/60 mt-3 flex items-center gap-1"><i data-lucide="check-check" class="w-3 h-3"></i> Sent via ${r.recipient_email}</div>
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        ${!r.sent_reply ? `
+                            <div class="space-y-4 pt-4 border-t border-gray-800">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-[10px] text-gray-500 uppercase font-black tracking-widest">Draft Reply</label>
+                                    <span class="text-[9px] text-violet-400/50">SENDING FROM: ${r.recipient_email}</span>
+                                </div>
+                                <textarea id="replyResponseText" rows="6" class="w-full bg-gray-950 border-2 border-gray-800 rounded-2xl px-5 py-4 text-sm text-white outline-none focus:border-violet-600 focus:bg-gray-900 transition-all resize-none shadow-2xl" placeholder="Compose your personal reply...">${r.draft_reply || ''}</textarea>
+                                
+                                <div class="flex gap-4 pt-2">
+                                    <button onclick="closeModal()" class="px-6 bg-gray-800 hover:bg-gray-700 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all">Cancel</button>
+                                    <button onclick="sendManualReply('${r.id}')" id="btnSendReply" class="flex-1 bg-gradient-to-br from-violet-600 to-indigo-700 hover:from-violet-500 hover:to-indigo-600 text-white text-xs font-black uppercase tracking-widest py-3.5 rounded-xl transition-all shadow-xl shadow-violet-900/30 flex items-center justify-center gap-2 group">
+                                        <i data-lucide="send" class="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform"></i>
+                                        Send Threaded Response
+                                    </button>
+                                </div>
+                            </div>
+                        ` : `
+                            <div class="flex justify-center">
+                                <button onclick="closeModal()" class="px-8 bg-gray-800 hover:bg-gray-700 text-white text-xs font-black uppercase tracking-widest py-3 rounded-xl transition-all border border-gray-700">Close Thread</button>
+                            </div>
+                        `}
+                    </div>
+                `);
+                lucide.createIcons();
+            } catch (e) {
+                showToast('Error: ' + e.message);
+                closeModal();
+            }
+        }
+
+        async function sendManualReply(replyId) {
+            const body = document.getElementById('replyResponseText').value.trim();
+            if (!body) return alert('Please enter your response before sending.');
+
+            const btn = document.getElementById('btnSendReply');
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Processing...';
+            btn.disabled = true;
+            lucide.createIcons();
+
+            try {
+                const res = await apiFetch(`/api/replies/${replyId}/send`, {
+                    method: 'POST',
+                    body: JSON.stringify({ body })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                showToast('🚀 Thread updated! Your reply is on its way.');
+                closeModal();
+                loadContent();
+            } catch (e) {
+                alert('Delivery Failure: ' + e.message);
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                lucide.createIcons();
+            }
+        }
+
+        function toggleSnapshotBody(id) {
+            const el = document.getElementById(`snap-body-${id}`);
+            if (el) el.classList.toggle('hidden');
+        }
+
+        // Track which buttons are toggled per row (locally for quick diffs if needed, but primarily driven by manual_channel string)
+        const _snapManualStates = {};
+
+        function getChannelBtnClass(manual_channel, channel) {
+            const isDone = (manual_channel || "").split(',').includes(channel);
+            if (!isDone) return 'snap-btn text-xs px-2 py-1 bg-gray-800 text-gray-400 border border-gray-700 rounded transition-colors hover:border-gray-500';
+
+            const colors = {
+                email: 'bg-violet-900/60 text-violet-300 border-violet-700',
+                wa: 'bg-emerald-900/60 text-emerald-300 border-emerald-700',
+                ig: 'bg-pink-900/60 text-pink-300 border-pink-700'
+            };
+            return `snap-btn snap-btn-done text-xs px-2 py-1 ${colors[channel] || 'bg-gray-700 text-white border-gray-600'} border rounded transition-colors`;
+        }
+
+        async function toggleChannelDone(id, channel, btn) {
+            const isDone = btn.classList.contains('snap-btn-done');
+            let channels = (_snapManualStates[id] || "").split(',').filter(x => x);
+
+            if (isDone) {
+                channels = channels.filter(c => c !== channel);
+            } else {
+                if (!channels.includes(channel)) channels.push(channel);
+            }
+
+            const newValue = channels.join(',');
+            const originalClass = btn.className;
+
+            // Optimistic UI update
+            btn.className = getChannelBtnClass(newValue, channel);
+            _snapManualStates[id] = newValue;
+
+            try {
+                const res = await apiFetch(`/api/sequences/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ manual_channel: newValue })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                // Success
+            } catch (e) {
+                // Rollback on error
+                btn.className = originalClass;
+                _snapManualStates[id] = (isDone ? channels.concat(channel).join(',') : channels.filter(c => c !== channel).join(','));
+                showToast('❌ Failed to save: ' + e.message);
+            }
+        }
+
+        async function markSnapshotDone(id, status, channel, btn) {
+            if (btn) { btn.disabled = true; btn.textContent = '…'; }
+            const payload = { status };
+            if (status === 'sent') payload.sent_at = new Date().toISOString();
+
+            try {
+                const res = await apiFetch(`/api/sequences/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) throw new Error('Failed');
+
+                showToast(status === 'replied' ? '✅ Contact marked as Replied' : '✅ Task completed');
+
+                // Hide or fade the row
+                const row = document.getElementById(`snap-row-${id}`);
+                if (row) {
+                    row.style.opacity = '0.3';
+                    row.style.pointerEvents = 'none';
+                    if (status === 'sent') {
+                        setTimeout(() => {
+                            row.classList.add('transition-all', 'duration-500', 'scale-95', 'opacity-0');
+                            setTimeout(() => row.remove(), 500);
+                        }, 800);
+                    }
+                }
+            } catch (e) {
+                if (btn) { btn.textContent = 'Error'; btn.disabled = false; }
+                showToast('❌ Error: ' + e.message);
+            }
+        }
+
+        // =========================================================================
+        // CONTACTS
+        // =========================================================================
+        async function loadContacts(area, actions) {
+            const statusFilter = currentSideTab === 'all' ? '' : currentSideTab;
+            const url = `/api/contacts?limit=100000${statusFilter ? `&status=${statusFilter}` : ''}`;
+            const res = await apiFetch(url);
+            const data = await res.json();
+            contactsCache = data.contacts || [];
+
+            actions.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <input type="text" id="contactSearch" placeholder="Search contacts..." oninput="filterContacts()" 
+                        class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-1.5 w-48 focus:border-violet-500 focus:outline-none">
+                    <button onclick="runCompanyEnrichment()" class="bg-fuchsia-500/20 text-fuchsia-400 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 hover:bg-fuchsia-500/30" title="Scrape company websites using Jina and extract 4-pillar data via Gemini">
+                        <i data-lucide="building-2" class="w-3.5 h-3.5"></i> Enrich Co.
+                    </button>
+                    <button onclick="runEnrichment()" class="bg-yellow-500/20 text-yellow-400 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 hover:bg-yellow-500/30">
+                        <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Enrich
+                    </button>
+                    <button onclick="runCamoufoxEnrichment()" class="bg-cyan-500/20 text-cyan-400 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 hover:bg-cyan-500/30" title="Stealth browser scraping — extracts email &amp; Instagram directly from website">
+                        <i data-lucide="shield" class="w-3.5 h-3.5"></i> Stealthy Enrich
+                    </button>
+                    <button onclick="runIcebreakers()" class="bg-violet-500/20 text-violet-400 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 hover:bg-violet-500/30">
+                        <i data-lucide="message-square" class="w-3.5 h-3.5"></i> Icebreakers
+                    </button>
+                    <button onclick="runCleanup()" class="bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 hover:bg-emerald-500/30">
+                        <i data-lucide="eraser" class="w-3.5 h-3.5"></i> Clean Names
+                    </button>
+                    <button onclick="createSequencesForSelected()" class="bg-indigo-500/20 text-indigo-400 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 hover:bg-indigo-500/30 ml-2">
+                        <i data-lucide="mail-plus" class="w-3.5 h-3.5"></i> Sequence
+                    </button>
+                    <button onclick="deleteSelectedContacts()" class="bg-red-500/20 text-red-400 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 hover:bg-red-500/30 ml-2">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Delete
+                    </button>
+                    <button onclick="verifySelectedContacts()" class="bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 hover:bg-emerald-500/30 ml-auto mr-2">
+                        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Verify Emails
+                    </button>
+                </div>
+            `;
+
+            renderContactTable(area, contactsCache, data.total);
+        }
+
+        function renderContactTable(area, contacts, total) {
+            const isReplied = currentSideTab === 'REPLIED';
+            area.innerHTML = `
+                <div class="mb-3 text-xs text-gray-400">${total || contacts.length} contacts</div>
+                <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                    <table class="w-full">
+                        <thead class="bg-gray-900/50 text-xs uppercase text-gray-400 border-b border-gray-800">
+                            <tr>
+                                <th class="px-4 py-3 text-left font-medium w-8"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" class="rounded bg-gray-800 border-gray-600"></th>
+                                <th class="px-4 py-3 text-left font-medium">Name</th>
+                                <th class="px-4 py-3 text-left font-medium">Company</th>
+                                ${isReplied ? '' : '<th class="px-4 py-3 text-left font-medium text-fuchsia-400">Company Info</th>'}
+                                ${isReplied ? '' : '<th class="px-4 py-3 text-left font-medium text-cyan-400">Website</th>'}
+                                ${isReplied ? '' : '<th class="px-4 py-3 text-left font-medium">Phone</th>'}
+                                <th class="px-4 py-3 text-left font-medium">Email</th>
+                                ${isReplied ? `
+                                <th class="px-4 py-3 text-left font-medium text-violet-400">Sender Email</th>
+                                <th class="px-4 py-3 text-left font-medium text-emerald-400 w-1/4">Reply Body</th>
+                                <th class="px-4 py-3 text-left font-medium text-sky-400">Sentiment</th>
+                                ` : ''}
+                                <th class="px-4 py-3 text-left font-medium">Status</th>
+                                <th class="px-4 py-3 text-right font-medium">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-800 text-sm" id="contactBody">
+                            ${contacts.length ? contacts.map(c => `
+                                <tr class="hover:bg-gray-800/30" id="row-${c.id}">
+                                    <td class="px-4 py-3"><input type="checkbox" class="contact-check rounded bg-gray-800 border-gray-600" value="${c.id}"></td>
+                                    <td class="px-4 py-3 font-medium text-white group relative">
+                                        <div class="flex items-center gap-2">
+                                            <span class="name-display cursor-pointer hover:bg-gray-800 px-1 py-0.5 rounded -ml-1 transition-colors border border-transparent hover:border-gray-700 max-w-[200px] truncate block" onclick="editContactName(this, '${c.id}')" id="name-display-${c.id}">${c.name || '—'}</span>
+                                            <i data-lucide="edit-2" class="w-3.5 h-3.5 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer flex-shrink-0 hover:text-white" onclick="editContactName(document.getElementById('name-display-${c.id}'), '${c.id}')"></i>
+                                        </div>
+                                        <div class="hidden absolute top-1/2 -translate-y-1/2 left-3 z-10 bg-gray-900 border border-violet-500 rounded flex shadow-xl min-w-[250px]" id="name-edit-container-${c.id}">
+                                            <input type="text" class="w-full bg-transparent text-white text-sm px-2 py-1 outline-none" value="${(c.name || '').replace(/"/g, '&quot;')}" id="name-input-${c.id}" onblur="saveContactName('${c.id}')" onkeydown="if(event.key==='Enter') saveContactName('${c.id}'); if(event.key==='Escape') cancelContactName('${c.id}')">
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3 text-gray-300 max-w-[150px] truncate" title="${(() => { try { const ed = typeof c.enrichment_data === 'string' ? JSON.parse(c.enrichment_data) : (c.enrichment_data || {}); return (c.company || ed.company || ed.linkedin_company || c.source || '').replace(/"/g, '&quot;'); } catch (e) { return c.source || ''; } })()}">${(() => { try { const ed = typeof c.enrichment_data === 'string' ? JSON.parse(c.enrichment_data) : (c.enrichment_data || {}); return c.company || ed.company || ed.linkedin_company || c.source || '—'; } catch (e) { return c.source || '—'; } })()}</td>
+                                    ${isReplied ? '' : `
+                                    <td class="px-4 py-3">
+                                        ${(() => {
+                                            try {
+                                                const ed = typeof c.enrichment_data === 'string' ? JSON.parse(c.enrichment_data) : (c.enrichment_data || {});
+                                                if (ed.company_context) {
+                                                    const ctxString = encodeURIComponent(JSON.stringify(ed.company_context)).replace(/'/g, "%27");
+                                                    const compString = encodeURIComponent(c.company || '').replace(/'/g, "%27");
+                                                    return `<button onclick="showCompanyContextModal('${compString}', '${ctxString}')" class="text-xs bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/50 px-2 py-1 rounded hover:bg-fuchsia-500/30 font-medium">View</button>`;
+                                                }
+                                                return '<span class="text-gray-600 text-xs">—</span>';
+                                            } catch(e) { return '<span class="text-gray-600 text-xs">—</span>'; }
+                                        })()}
+                                    </td>
+                                    <td class="px-4 py-3 text-cyan-400 font-medium">
+                                        ${(() => {
+                        try {
+                            const ed = typeof c.enrichment_data === 'string' ? JSON.parse(c.enrichment_data) : (c.enrichment_data || {});
+                            const w = ed.website;
+                            if (!w) return '<span class="text-gray-600">—</span>';
+                            const cleanW = w.startsWith('http') ? w : 'https://' + w;
+                            return `<a href="${cleanW}" target="_blank" class="hover:underline flex items-center gap-1"><i data-lucide="external-link" class="w-3 h-3"></i> Visit</a>`;
+                        } catch (e) { return '<span class="text-gray-600">—</span>'; }
+                    })()}
+                                    </td>
+                                    <td class="px-4 py-3 text-gray-400 text-xs">${c.phone || '—'}</td>
+                                    `}
+                                    <td class="px-4 py-3 text-gray-300">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="${c.email ? 'text-gray-300' : 'text-gray-600'}">${c.email || '—'}</span>
+                                            ${c.email ? `<button onclick="copyToClipboard('${c.email}', this)" class="text-gray-500 hover:text-white transition-colors"><i data-lucide="copy" class="w-3 h-3"></i></button>` : ''}
+                                        </div>
+                                    </td>
+                                    ${isReplied ? (() => {
+                    let r = null;
+                    if (c.replies && c.replies.length > 0) {
+                        r = c.replies.reduce((prev, curr) => new Date(curr.received_at) > new Date(prev.received_at) ? curr : prev);
+                    }
+                    return `
+                                        <td class="px-4 py-3 text-[11px] text-gray-400 font-mono">${r && r.sender_email ? r.sender_email : '—'}</td>
+                                        <td class="px-4 py-3 text-[11px] text-gray-300 max-w-xs"><div class="line-clamp-2 italic" title="${r && r.body ? r.body.replace(/"/g, '&quot;') : ''}">${r && r.body ? r.body : '—'}</div></td>
+                                        <td class="px-4 py-3">${r && r.sentiment ? sentimentBadge(r.sentiment) : '—'}</td>
+                                        `;
+                })() : ''}
+                                    <td class="px-4 py-3 flex items-center gap-2">
+                                        <span class="status-${c.status} text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-current opacity-80">${c.status || 'new'}</span>
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        <button onclick="showContactDetail('${c.id}')" class="text-gray-400 hover:text-white mr-2">
+                                            <i data-lucide="eye" class="w-4 h-4 inline"></i>
+                                        </button>
+                                        <button onclick="deleteContact('${c.id}')" class="text-gray-400 hover:text-red-400">
+                                            <i data-lucide="trash-2" class="w-4 h-4 inline"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            `).join('') : '<tr><td colspan="10" class="px-4 py-12 text-center text-gray-500">No contacts yet. Run a search to discover business websites.</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function filterContacts() {
+            const q = document.getElementById('contactSearch').value.toLowerCase();
+            const filtered = contactsCache.filter(c =>
+                c.name.toLowerCase().includes(q) || (c.bio || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q)
+            );
+            renderContactTable(document.getElementById('contentArea'), filtered, contactsCache.length);
+            lucide.createIcons();
+        }
+
+        function toggleSelectAll() {
+            const checked = document.getElementById('selectAll').checked;
+            document.querySelectorAll('.contact-check').forEach(cb => cb.checked = checked);
+        }
+
+        function getSelectedContactIds() {
+            return [...document.querySelectorAll('.contact-check:checked')].map(cb => cb.value);
+        }
+
+        // ── Shared verify progress banner ──────────────────────────────────────
+        function _showVerifyBanner(total) {
+            let b = document.getElementById('verifyProgressBanner');
+            if (!b) {
+                b = document.createElement('div');
+                b.id = 'verifyProgressBanner';
+                b.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 border border-emerald-500 rounded-2xl px-6 py-4 shadow-2xl min-w-[380px]';
+                document.body.appendChild(b);
+            }
+            b.innerHTML = `
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm text-white font-semibold flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span> Verifying emails...</span>
+                    <span id="verifyProgressCount" class="text-xs text-emerald-400 font-mono">0 / ${total}</span>
+                </div>
+                <div class="w-full bg-gray-800 rounded-full h-2 mb-2">
+                    <div id="verifyProgressBar" class="bg-gradient-to-r from-emerald-500 to-teal-500 h-2 rounded-full transition-all duration-500" style="width:2%"></div>
+                </div>
+                <p class="text-xs text-gray-500">Safe to navigate away — you'll see results here.</p>
+            `;
+            return b;
+        }
+
+        function _pollVerifyProgress(jobId, total) {
+            let done = false;
+            const poll = setInterval(async () => {
+                try {
+                    const r = await apiFetch(`/api/verify-jobs/${jobId}`);
+                    const d = await r.json();
+                    const pct = Math.max(2, Math.min(100, (d.done || 0) / total * 100));
+                    const bar = document.getElementById('verifyProgressBar');
+                    const cnt = document.getElementById('verifyProgressCount');
+                    if (bar) bar.style.width = pct + '%';
+                    if (cnt) cnt.textContent = `${d.done || 0} / ${total}`;
+                    if (d.status === 'done' || d.status === 'error') {
+                        clearInterval(poll);
+                        done = true;
+                        const b = document.getElementById('verifyProgressBanner');
+                        if (b) {
+                            const skipped = d.skipped || 0;
+                            const valid = d.valid || 0;
+                            const icon = d.status === 'error' ? '⚠️' : '✅';
+                            const msg = d.status === 'error'
+                                ? `Error: ${d.error || 'Unknown'}`
+                                : `${valid} clean${skipped ? `, ${skipped} bad email${skipped > 1 ? 's' : ''} cleared` : ''}`;
+                            b.innerHTML = `<div class="flex items-center justify-between"><span class="text-emerald-400 font-semibold">${icon} ${msg}</span><button onclick="document.getElementById('verifyProgressBanner').remove(); loadContent();" class="text-gray-500 hover:text-white ml-4 text-xl leading-none">&times;</button></div>`;
+                            setTimeout(() => { loadContent(); b.remove(); }, 4000);
+                        }
+                    }
+                } catch (_) { }
+            }, 2000);
+            setTimeout(() => {
+                if (!done) {
+                    clearInterval(poll);
+                    const b = document.getElementById('verifyProgressBanner');
+                    if (b) b.innerHTML = `<div class="flex items-center justify-between"><span class="text-yellow-400 font-semibold">⚠️ Still running — refresh to check.</span><button onclick="document.getElementById('verifyProgressBanner').remove()" class="text-gray-500 hover:text-white ml-4 text-xl">&times;</button></div>`;
+                }
+            }, 300000);
+        }
+
+        async function _startVerify(ids) {
+            _showVerifyBanner(ids.length);
+            try {
+                const res = await apiFetch('/api/contacts/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contact_ids: ids })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                _pollVerifyProgress(data.job_id, ids.length);
+            } catch (e) {
+                const b = document.getElementById('verifyProgressBanner');
+                if (b) b.remove();
+                showToast('❌ ' + e.message);
+            }
+        }
+
+        async function verifySelectedContacts() {
+            const ids = getSelectedContactIds();
+            if (!ids.length) return alert('Select contacts to verify');
+            if (!confirm(`Verify emails for ${ids.length} contacts? Invalid emails will be cleared.`)) return;
+            await _startVerify(ids);
+        }
+
+        // =========================================================================
+        // SEQUENCES
+        // =========================================================================
+        async function verifySelectedSequences() {
+            const ids = [...document.querySelectorAll('.seq-check:checked')].map(cb => cb.value);
+            if (!ids.length) return alert('Select sequences to verify (check the box next to the contact name)');
+            if (!confirm(`Verify emails for ${ids.length} contacts? Invalid emails will be cleared.`)) return;
+            await _startVerify(ids);
+        }
+
+        async function loadSequences(area, actions) {
+            let url = '/api/sequences';
+            if (currentSideTab !== 'all-seq') {
+                url += `?status=${currentSideTab}`;
+            }
+            const res = await apiFetch(url);
+            const data = await res.json();
+            const sequences = data.sequences || [];
+            window.latestSequences = sequences;
+
+            actions.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <button onclick="runDailySend()" id="btnDailyRun" class="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg transition-all">
+                        <i data-lucide="play" class="w-4 h-4 inline mr-1"></i> Run Daily Send
+                    </button>
+                    <button onclick="sendSelectedSequences()" id="btnSendSelected" class="bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-lg text-sm font-medium border border-gray-700 transition-all">
+                        <i data-lucide="send" class="w-4 h-4 inline mr-1"></i> Send Selected
+                    </button>
+                    <button onclick="showTestSendModal()" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg transition-all">
+                        <i data-lucide="send" class="w-4 h-4 inline mr-1"></i> Test Workflow
+                    </button>
+                    <button onclick="checkReplies()" id="btnCheckReplies" class="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg transition-all">
+                        <i data-lucide="mail-check" class="w-4 h-4 inline mr-1"></i> Check Replies
+                    </button>
+                    <button onclick="verifySelectedSequences()" id="btnVerifySelectedSeq" class="bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 px-4 py-2 rounded-lg text-sm font-medium border border-transparent transition-all">
+                        <i data-lucide="shield-check" class="w-4 h-4 inline mr-1"></i> Verify Emails
+                    </button>
+                    <button id="btnDeleteSelectedSeq" onclick="deleteSelectedSeqs()" class="hidden bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-lg transition-all">
+                        <i data-lucide="trash-2" class="w-4 h-4 inline mr-1"></i> Delete Selected
+                    </button>
+                </div>
+            `;
+            if (window.lucide) window.lucide.createIcons();
+
+            // Group sequences by contact
+            const grouped = {};
+            sequences.forEach(s => {
+                const cid = s.contact_id;
+                if (!grouped[cid]) {
+                    grouped[cid] = {
+                        contact: s.contacts || s.film_contacts,
+                        steps: []
+                    };
+                }
+                grouped[cid].steps.push(s);
+            });
+
+            // Sort steps within each contact by step_number
+            Object.values(grouped).forEach(g => {
+                g.steps.sort((a, b) => a.step_number - b.step_number);
+            });
+
+            const contactIds = Object.keys(grouped);
+
+            area.innerHTML = `
+                <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                    <table class="w-full">
+                        <thead class="bg-gray-900/50 text-xs uppercase text-gray-400 border-b border-gray-800">
+                            <tr>
+                                <th class="px-4 py-3 text-left font-medium w-8"><input type="checkbox" id="seqSelectAll" onchange="toggleSeqSelectAll()" class="rounded bg-gray-800 border-gray-600"></th>
+                                <th class="px-4 py-3 text-left font-medium w-8"></th>
+                                <th class="px-4 py-3 text-left font-medium">Contact</th>
+                                <th class="px-4 py-3 text-left font-medium">Email</th>
+                                <th class="px-4 py-3 text-left font-medium">Progress</th>
+                                <th class="px-4 py-3 text-left font-medium">Next Step</th>
+                                <th class="px-4 py-3 text-right font-medium">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-800 text-sm">
+                            ${contactIds.length ? contactIds.map(cid => {
+                const g = grouped[cid];
+                const totalSteps = g.steps.length;
+                const sentSteps = g.steps.filter(s => s.status === 'sent').length;
+                const pendingSteps = g.steps.filter(s => s.status === 'pending');
+                const nextStep = pendingSteps.length ? pendingSteps[0] : null;
+
+                return `
+                                    <!-- Main Contact Row -->
+                                    <tr class="hover:bg-gray-800/30" id="seq-row-${cid}">
+                                        <td class="px-4 py-3" onclick="event.stopPropagation()">
+                                            <input type="checkbox" class="seq-check rounded bg-gray-800 border-gray-600" value="${cid}" onchange="updateSeqDeleteBtn()">
+                                        </td>
+                                        <td class="px-4 py-3 text-gray-500 cursor-pointer" onclick="document.getElementById('seq-${cid}').classList.toggle('hidden')"><i data-lucide="chevron-down" class="w-4 h-4"></i></td>
+                                        <td class="px-4 py-3 font-medium text-white cursor-pointer" onclick="document.getElementById('seq-${cid}').classList.toggle('hidden')">${g.contact?.name || '—'}</td>
+                                        <td class="px-4 py-3 text-gray-400">${g.contact?.email || '—'}</td>
+                                        <td class="px-4 py-3 text-gray-400">
+                                            <div class="flex items-center gap-2">
+                                                <div class="w-24 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                                                    <div class="bg-violet-500 h-full" style="width: ${(sentSteps / totalSteps) * 100}%"></div>
+                                                </div>
+                                                <span class="text-xs">${sentSteps}/${totalSteps}</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 text-gray-500 text-xs">
+                                            ${nextStep ? `Step ${nextStep.step_number} on ${new Date(nextStep.scheduled_at).toLocaleDateString()}` : 'Completed'}
+                                        </td>
+                                        <td class="px-4 py-3 text-right" onclick="event.stopPropagation()">
+                                            <button onclick="deleteContactSequence('${cid}')" title="Delete all sequences for this contact" class="text-gray-600 hover:text-red-400 transition-colors">
+                                                <i data-lucide="trash-2" class="w-4 h-4 inline"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <!-- Expandable Steps Row -->
+                                    <tr id="seq-${cid}" class="hidden bg-gray-900/30">
+                                        <td colspan="6" class="p-0 border-t border-gray-800">
+                                            <div class="p-4 pl-12">
+                                                <table class="w-full text-xs">
+                                                    <thead>
+                                                        <tr class="text-gray-500 border-b border-gray-800/50">
+                                                            <th class="pb-2 text-left font-medium w-16">Step</th>
+                                                            <th class="pb-2 text-left font-medium">Subject</th>
+                                                            <th class="pb-2 text-left font-medium w-24">Status</th>
+                                                            <th class="pb-2 text-left font-medium w-32">Scheduled</th>
+                                                            <th class="pb-2 text-left font-medium w-32">Sent</th>
+                                                            <th class="pb-2 text-left font-medium w-40">Actions</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody class="divide-y divide-gray-800/50">
+                                                        ${g.steps.map(s => `
+                                                            <tr class="hover:bg-gray-800/20 cursor-pointer" onclick="editSequenceStep('${s.id}')" title="Click to edit email text">
+                                                                <td class="py-2 text-gray-400">Step ${s.step_number}</td>
+                                                                <td class="py-2 text-gray-300 max-w-[250px] truncate pr-4">${s.subject}</td>
+                                                                <td class="py-2"><span id="seq-status-cell-${s.id}" class="status-${s.status} px-1.5 py-0.5 rounded-sm">${s.status}${s.manual_channel ? ' (' + s.manual_channel.toUpperCase() + ')' : ''}</span></td>
+                                                                <td class="py-2 text-gray-500">${s.scheduled_at ? new Date(s.scheduled_at).toLocaleDateString() : '—'}</td>
+                                                                <td class="py-2 text-gray-500" id="seq-sent-cell-${s.id}">${s.sent_at ? new Date(s.sent_at).toLocaleDateString() : '—'}</td>
+                                                                <td class="py-2">
+                                                                    ${(s.status === 'pending' || s.status === 'sent') ? `
+                                                                        <div class="flex gap-1 flex-wrap">
+                                                                            <button id="seq-btn-email-${s.id}" data-db-status="${s.status}" onclick="event.stopPropagation(); toggleSeqChannel('${s.id}', 'email', this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded transition-colors" title="Mark email sent">✉ Email</button>
+                                                                            <button id="seq-btn-wa-${s.id}" data-db-status="${s.status}" onclick="event.stopPropagation(); toggleSeqChannel('${s.id}', 'wa', this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded transition-colors" title="Mark WA sent">📱 WA</button>
+                                                                            <button id="seq-btn-ig-${s.id}" data-db-status="${s.status}" onclick="event.stopPropagation(); toggleSeqChannel('${s.id}', 'ig', this)" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded transition-colors" title="Mark IG sent">📷 IG</button>
+                                                                            <button onclick="event.stopPropagation(); markSequenceStatus('${s.id}', 'replied')" class="text-xs px-2 py-1 bg-gray-800 text-gray-400 rounded hover:bg-amber-900/50 hover:text-amber-400 transition-colors" title="Mark as replied">↩ Replied</button>
+                                                                        </div>
+                                                                    ` : ''}
+                                                                </td>
+                                                            </tr>
+                                                        `).join('')}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `;
+            }).join('') : '<tr><td colspan="5" class="px-4 py-12 text-center text-gray-500">No sequences yet. Select contacts and create sequences from the Contacts tab.</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            restoreSeqChannelColors();
+        }
+
+        // =========================================================================
+        // PIPELINE
+        // =========================================================================
+        async function loadPipeline(area) {
+            const res = await apiFetch('/api/dashboard/stats');
+            const stats = await res.json();
+            const c = stats.contacts || {};
+            const total = c.total || 1;
+
+            const stages = [
+                { label: 'New', count: c.new, icon: 'user-plus', color: 'blue' },
+                { label: 'Enriched', count: c.enriched, icon: 'sparkles', color: 'yellow' },
+                { label: 'Icebreaker Ready', count: c.icebreaker_ready, icon: 'message-square', color: 'violet' },
+                { label: 'In Sequence', count: c.in_sequence, icon: 'mail', color: 'orange' },
+                { label: 'Completed', count: c.completed, icon: 'check-circle', color: 'emerald' }
+            ];
+
+            area.innerHTML = `
+                <div class="grid grid-cols-5 gap-4 mb-8">
+                    ${stages.map((s, i) => `
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 text-center relative">
+                            ${i < stages.length - 1 ? '<div class="absolute top-1/2 -right-2 transform -translate-y-1/2 text-gray-600"><i data-lucide="chevron-right" class="w-4 h-4"></i></div>' : ''}
+                            <div class="inline-flex p-3 bg-${s.color}-500/20 rounded-xl mb-3">
+                                <i data-lucide="${s.icon}" class="w-6 h-6 text-${s.color}-400"></i>
+                            </div>
+                            <p class="text-3xl font-bold text-white">${s.count || 0}</p>
+                            <p class="text-xs text-gray-400 mt-1">${s.label}</p>
+                            <div class="mt-3 bg-gray-800 rounded-full h-1.5">
+                                <div class="bg-${s.color}-500 rounded-full h-1.5" style="width: ${((s.count || 0) / total * 100).toFixed(0)}%"></div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                    <h3 class="text-sm font-semibold text-white mb-4">Conversion Funnel</h3>
+                    <div class="space-y-3">
+                        ${stages.map(s => `
+                            <div class="flex items-center gap-4">
+                                <span class="text-xs text-gray-400 w-32 text-right">${s.label}</span>
+                                <div class="flex-1 bg-gray-800 rounded-full h-6 relative overflow-hidden">
+                                    <div class="bg-gradient-to-r from-${s.color}-600 to-${s.color}-400 h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2" style="width: ${Math.max(((s.count || 0) / total * 100), 2).toFixed(0)}%">
+                                        <span class="text-xs font-medium text-white">${s.count || 0}</span>
+                                    </div>
+                                </div>
+                                <span class="text-xs text-gray-500 w-12">${((s.count || 0) / total * 100).toFixed(0)}%</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+
+        // =========================================================================
+        // TEMPLATES
+        // =========================================================================
+        async function loadTemplates(area) {
+            const res = await apiFetch('/api/templates');
+            const data = await res.json();
+            const templates = data.templates || [];
+
+            if (!templates.length) {
+                area.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-64 text-center">
+                        <i data-lucide="file-text" class="w-12 h-12 text-gray-600 mb-4"></i>
+                        <h3 class="text-lg font-semibold text-white mb-2">No Templates Yet</h3>
+                        <p class="text-gray-400 mb-4">Seed the 4-step drip sequence templates to get started.</p>
+                        <button onclick="seedTemplates()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                            Seed Default Templates
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            area.innerHTML = `
+                <div class="mb-6 bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-5">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <h3 class="text-sm font-bold text-emerald-400 uppercase tracking-wider">Custom Sequence Instructions</h3>
+                            <p class="text-xs text-gray-400">These instructions override default rules and project description when regenerating.</p>
+                        </div>
+                        <button onclick="saveCustomInstructions()" class="text-emerald-400 hover:text-emerald-300 text-xs font-medium flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded">
+                            <i data-lucide="save" class="w-3 h-3"></i> Save Instructions
+                        </button>
+                    </div>
+                    <textarea id="customSequenceInstructions" rows="3" class="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-gray-200 text-sm outline-none focus:border-emerald-500 transition-colors" placeholder="e.g. Focus on Step 1 being about our 24h turnaround time. Use a friendly but professional tone.">${data.custom_instructions || ''}</textarea>
+                </div>
+
+                <div class="mb-4 flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-white">Sequence Builder</h3>
+                        <p class="text-xs text-gray-400">Variables: <code class="text-violet-400 bg-gray-800 px-1 rounded">{{first_name}}</code> <code class="text-violet-400 bg-gray-800 px-1 rounded">{{name}}</code> <code class="text-violet-400 bg-gray-800 px-1 rounded">{{company}}</code> <code class="text-violet-400 bg-gray-800 px-1 rounded">{{location}}</code> <code class="text-violet-400 bg-gray-800 px-1 rounded">{{niche}}</code> <code class="text-violet-400 bg-gray-800 px-1 rounded">{{sender_name}}</code></p>
+                    </div>
+                    <button id="btnRegenAll" onclick="regenerateAllTemplates()" class="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Regenerate All (Uses Instructions)
+                    </button>
+                </div>
+                <div class="space-y-4" id="templates-container">
+                    ${templates.map(t => `
+                        <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 cursor-move hover:border-gray-600 transition-colors" id="template-${t.id}" data-id="${t.id}" draggable="true" ondragstart="dragTemplate(event, ${t.id})" ondragover="allowDropTemplate(event)" ondrop="dropTemplate(event, ${t.id})">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="text-gray-600"><i data-lucide="grip-vertical" class="w-4 h-4"></i></div>
+                                    <span class="bg-violet-500/20 text-violet-400 text-xs font-bold px-2.5 py-1 rounded-lg">Step ${t.step_number}</span>
+                                    <input type="text" id="t-name-${t.id}" value="${t.name.replace(/"/g, '&quot;')}" class="bg-transparent border-b border-dashed border-gray-600 text-white font-semibold focus:outline-none focus:border-violet-500">
+                                </div>
+                                <div class="flex items-center gap-4 text-sm">
+                                    <label class="text-gray-400 flex items-center gap-2">
+                                        Delay (Days): <input type="number" id="t-delay-${t.id}" value="${t.delay_days}" class="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-center focus:outline-none focus:border-violet-500">
+                                    </label>
+                                    <button onclick="regenerateTemplateAI(${t.id}, ${t.step_number})" class="text-indigo-400 hover:text-indigo-300 flex items-center gap-1" title="Rewrite this step with AI"><i data-lucide="refresh-cw" class="w-4 h-4"></i> Regenerate</button>
+                                    <button onclick="saveTemplate(${t.id})" class="text-emerald-400 hover:text-emerald-300 flex items-center gap-1"><i data-lucide="save" class="w-4 h-4"></i> Save</button>
+                                    <button onclick="deleteTemplate(${t.id})" class="text-red-400 hover:text-red-300 flex items-center gap-1"><i data-lucide="trash" class="w-4 h-4"></i> Del</button>
+                                </div>
+                            </div>
+                            
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs text-gray-400 mb-1">Subject</label>
+                                    <input type="text" id="t-subject-${t.id}" value="${t.subject_template.replace(/"/g, '&quot;')}" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-400 mb-1">Body Text</label>
+                                    <textarea id="t-body-${t.id}" rows="6" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 text-sm font-mono focus:outline-none focus:border-violet-500">${t.body_template}</textarea>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            // Call createIcons to render the newly injected lucide icons
+            setTimeout(() => {
+                if (window.lucide) window.lucide.createIcons();
+            }, 50);
+        }
+
+        async function saveTemplate(id) {
+            const name = document.getElementById(`t-name-${id}`).value;
+            const delay_days = parseInt(document.getElementById(`t-delay-${id}`).value, 10);
+            const subject_template = document.getElementById(`t-subject-${id}`).value;
+            const body_template = document.getElementById(`t-body-${id}`).value;
+
+            showToast('Saving template...');
+            try {
+                const res = await apiFetch(`/api/templates/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, delay_days, subject_template, body_template })
+                });
+                if (!res.ok) throw new Error(await res.text());
+                showToast('✅ Template saved');
+            } catch (e) {
+                showToast('❌ Error saving: ' + e.message);
+            }
+        }
+
+        async function saveCustomInstructions() {
+            const custom = document.getElementById('customSequenceInstructions').value.trim();
+            showToast('Saving instructions...');
+            try {
+                const res = await apiFetch(`/api/projects/${currentProjectId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ custom_instructions: custom })
+                });
+                if (!res.ok) throw new Error(await res.text());
+                showToast('✅ Custom instructions saved');
+            } catch (e) {
+                showToast('❌ Error: ' + e.message);
+            }
+        }
+
+        async function regenerateAllTemplates() {
+            const custom = document.getElementById('customSequenceInstructions').value.trim();
+            if (!confirm('Regenerate ALL 4 templates from scratch using these instructions? This will REPLACE all existing templates.')) return;
+            const btn = document.getElementById('btnRegenAll');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1"></i> Regenerating...'; if (window.lucide) window.lucide.createIcons(); }
+            showToast('🔁 Regenerating all 4 templates...');
+            try {
+                const res = await apiFetch('/api/templates/regenerate-all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ custom_instructions: custom })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                showToast('✅ All templates regenerated!');
+                loadContent();
+            } catch (e) {
+                showToast('❌ ' + e.message);
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i data-lucide="refresh-cw" class="w-4 h-4 inline mr-1"></i> Regenerate All'; }
+            }
+        }
+
+        async function regenerateTemplateAI(id, stepNumber) {
+            const currentBody = document.getElementById(`t-body-${id}`).value.trim();
+            const currentSubject = document.getElementById(`t-subject-${id}`).value.trim();
+            const rewrite = currentBody.length > 20;
+            let promptText;
+            if (rewrite) {
+                promptText = `Rewrite this Step ${stepNumber} cold email with a fresh feel, same intent and length.\n\nSubject: ${currentSubject}\n\nBody:\n${currentBody}`;
+            } else {
+                const custom = window.prompt(`Describe what Step ${stepNumber} should do:`);
+                if (!custom) return;
+                promptText = custom + ` This is step ${stepNumber} in the sequence.`;
+            }
+            showToast('🔁 Regenerating...');
+            try {
+                const res = await apiFetch('/api/templates/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: promptText })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                document.getElementById(`t-subject-${id}`).value = data.subject_template;
+                document.getElementById(`t-body-${id}`).value = data.body_template;
+                showToast('✅ Done! Review and Save.');
+            } catch (e) { showToast('❌ ' + e.message); }
+        }
+
+        async function generateTemplateAI(id, stepNumber) {
+            const userPrompt = window.prompt('What should this email step be about?');
+            if (!userPrompt) return;
+            showToast('🪄 AI is writing the template...');
+            try {
+                const res = await apiFetch('/api/templates/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: userPrompt + " This is step " + stepNumber + " in the sequence." })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                document.getElementById(`t-subject-${id}`).value = data.subject_template;
+                document.getElementById(`t-body-${id}`).value = data.body_template;
+                showToast('✅ AI generation complete. Remember to Save!');
+            } catch (e) {
+                showToast('❌ Generation error: ' + e.message);
+            }
+        }
+
+        async function deleteTemplate(id) {
+            if (!confirm('Are you sure you want to delete this template? Sequence alignment may change.')) return;
+            try {
+                await apiFetch(`/api/templates/${id}`, { method: 'DELETE' });
+                showToast('✅ Template deleted');
+                loadContent();
+            } catch (e) {
+                showToast('❌ Error: ' + e.message);
+            }
+        }
+
+        let draggedTemplateId = null;
+
+        function dragTemplate(ev, id) {
+            draggedTemplateId = id;
+            ev.dataTransfer.effectAllowed = "move";
+        }
+
+        function allowDropTemplate(ev) {
+            ev.preventDefault();
+        }
+
+        async function dropTemplate(ev, targetId) {
+            ev.preventDefault();
+            if (draggedTemplateId === targetId) return;
+
+            const container = document.getElementById('templates-container');
+            const nodes = Array.from(container.children);
+
+            const draggedNode = document.getElementById(`template-${draggedTemplateId}`);
+            const targetNode = document.getElementById(`template-${targetId}`);
+
+            const targetIndex = nodes.indexOf(targetNode);
+            const draggedIndex = nodes.indexOf(draggedNode);
+
+            // visually move it
+            if (draggedIndex < targetIndex) {
+                targetNode.after(draggedNode);
+            } else {
+                targetNode.before(draggedNode);
+            }
+
+            // trigger API
+            const newOrder = Array.from(container.children).map(n => parseInt(n.dataset.id, 10));
+            showToast('Saving template order...');
+            try {
+                const res = await apiFetch('/api/templates/reorder', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ template_ids: newOrder })
+                });
+                if (!res.ok) throw new Error(await res.text());
+                showToast('✅ Order saved');
+                loadContent();
+            } catch (e) {
+                showToast('❌ Error saving order: ' + e.message);
+            }
+        }
+
+        function showTestSendModal() {
+            openModal(`
+                <div class="p-6">
+                    <h2 class="text-xl font-bold text-white mb-2">Test Workflow</h2>
+                    <p class="text-sm text-gray-400 mb-4">Send your Step 1 template (with mock data) to up to 3 test emails to check inbox placement and formatting.</p>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Test Email 1</label>
+                            <input type="email" id="testEmail1" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white outline-none focus:border-emerald-500" placeholder="you@gmail.com">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Test Email 2 (optional)</label>
+                            <input type="email" id="testEmail2" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white outline-none focus:border-emerald-500" placeholder="you@yahoo.com">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Test Email 3 (optional)</label>
+                            <input type="email" id="testEmail3" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white outline-none focus:border-emerald-500" placeholder="you@outlook.com">
+                        </div>
+                    </div>
+                    <div class="mt-6 flex gap-3">
+                        <button onclick="closeModal()" class="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 rounded-lg transition-colors">Cancel</button>
+                        <button onclick="sendTestSequence()" id="btnTestSend" class="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium py-2 rounded-lg transition-colors shadow-lg">
+                            <span id="testSendText">Send Test</span>
+                        </button>
+                    </div>
+                </div>
+            `);
+        }
+
+        async function sendTestSequence() {
+            const emails = [
+                document.getElementById('testEmail1').value.trim(),
+                document.getElementById('testEmail2').value.trim(),
+                document.getElementById('testEmail3').value.trim()
+            ].filter(e => e);
+
+            if (!emails.length) return alert('Enter at least one test email.');
+
+            const btnText = document.getElementById('testSendText');
+            btnText.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1"></i> Sending...';
+            if (window.lucide) window.lucide.createIcons();
+
+            try {
+                const res = await fetch('/api/sequences/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ project_id: currentProjectId, test_emails: emails })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                const results = data.results || [];
+                const successCount = results.filter(r => r.success).length;
+                const failCount = results.filter(r => !r.success).length;
+
+                closeModal();
+                if (failCount) {
+                    showToast(`⚠️ ${successCount} sent, ${failCount} failed. Check SMTP settings.`);
+                } else {
+                    showToast(`✅ Test emails sent to ${successCount} address(es)! Check your inbox.`);
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+                btnText.innerText = 'Send Test';
+            }
+        }
+
+        async function checkReplies() {
+            const btn = document.getElementById('btnCheckReplies');
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1"></i> Scanning...';
+            if (window.lucide) window.lucide.createIcons();
+
+            try {
+                const res = await fetch('/api/sequences/check-replies', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ days: 7 })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                showToast(`🚀 Reply check started! <button onclick="switchTopTab('logs')" class="ml-2 text-violet-400 hover:text-violet-300 font-bold underline">View Live Logs</button>`, true);
+            } catch (e) {
+                showToast('❌ Reply check error: ' + e.message);
+            } finally {
+                btn.innerHTML = origHtml;
+                if (window.lucide) window.lucide.createIcons();
+            }
+        }
+
+        // Per-channel state: persisted in localStorage keyed by sequence step ID
+        const SEQ_CHANNEL_KEY = 'seq_channels';
+        const CH_COLORS = { email: 'bg-violet-900/60 text-violet-300', wa: 'bg-emerald-900/60 text-emerald-300', ig: 'bg-pink-900/60 text-pink-300' };
+        const CH_BASE = 'text-xs px-2 py-1 rounded transition-colors';
+
+        function _getSeqChannels() {
+            try { return JSON.parse(localStorage.getItem(SEQ_CHANNEL_KEY) || '{}'); } catch { return {}; }
+        }
+        function _setSeqChannels(data) { localStorage.setItem(SEQ_CHANNEL_KEY, JSON.stringify(data)); }
+
+        function _applyBtnColor(btn, channel, on) {
+            btn.className = on ? `${CH_BASE} border ${CH_COLORS[channel] || 'bg-gray-700 text-white border-gray-600'}` : `${CH_BASE} bg-gray-800 text-gray-400 border border-gray-700`;
+        }
+
+        async function _syncStatusToDB(stepId, status, sentAt = undefined) {
+            const body = { status };
+            if (status === 'sent') body.sent_at = sentAt || new Date().toISOString();
+            if (status === 'pending') body.sent_at = null;
+            await fetch(`/api/sequences/${stepId}`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+            });
+            // Update Status column badge
+            const badge = document.getElementById(`seq-status-cell-${stepId}`);
+            if (badge) { badge.className = `status-${status} px-1.5 py-0.5 rounded-sm`; badge.textContent = status; }
+            // Update Sent column cell
+            const sentCell = document.getElementById(`seq-sent-cell-${stepId}`);
+            if (sentCell) sentCell.textContent = status === 'sent' ? new Date().toLocaleDateString() : '—';
+            // Update data-db-status on all channel buttons
+            ['email', 'wa', 'ig'].forEach(ch => {
+                const b = document.getElementById(`seq-btn-${ch}-${stepId}`);
+                if (b) b.dataset.dbStatus = status;
+            });
+        }
+
+        async function toggleSeqChannel(stepId, channel, btn) {
+            const data = _getSeqChannels();
+            const key = `${stepId}:${channel}`;
+            const wasDone = !!data[key];
+
+            if (wasDone) {
+                // UNDO this channel
+                delete data[key];
+                _applyBtnColor(btn, channel, false);
+                // Revert to pending ONLY if ALL channels are now off
+                const anyOn = data[`${stepId}:email`] || data[`${stepId}:wa`] || data[`${stepId}:ig`];
+                if (!anyOn) {
+                    await _syncStatusToDB(stepId, 'pending');
+                }
+            } else {
+                // MARK DONE — any single channel done = step is sent (removes from daily snapshot)
+                data[key] = true;
+                _applyBtnColor(btn, channel, true);
+                const dbStatus = btn.dataset.dbStatus;
+                if (dbStatus !== 'sent') {
+                    await _syncStatusToDB(stepId, 'sent');
+                }
+            }
+            _setSeqChannels(data);
+        }
+
+        function restoreSeqChannelColors() {
+            const data = _getSeqChannels();
+            // Restore from localStorage
+            for (const key of Object.keys(data)) {
+                const [stepId, channel] = key.split(':');
+                const btn = document.getElementById(`seq-btn-${channel}-${stepId}`);
+                if (btn) _applyBtnColor(btn, channel, true);
+            }
+            // Pre-color Email buttons from DB status=sent (and seed localStorage)
+            document.querySelectorAll('[id^="seq-btn-email-"]').forEach(btn => {
+                const stepId = btn.id.replace('seq-btn-email-', '');
+                const key = `${stepId}:email`;
+                if (btn.dataset.dbStatus === 'sent' && !data[key]) {
+                    data[key] = true;
+                    _applyBtnColor(btn, 'email', true);
+                }
+            });
+            _setSeqChannels(data);
+        }
+
+        async function markSequenceStatus(sequenceId, newStatus, channel = null) {
+            // Email/WA/IG are now local-only toggles — only 'replied' hits the DB
+            if (newStatus !== 'replied') return;
+
+            if (!confirm('This will mark the contact as REPLIED and cancel ALL remaining pending steps for them. Continue?')) return;
+
+            try {
+                const body = { status: newStatus };
+                const res = await fetch(`/api/sequences/${sequenceId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                showToast('↩ Contact marked as replied. All future steps cancelled.');
+                loadContent(); // refresh only on replied
+            } catch (e) {
+                showToast('❌ Error: ' + e.message);
+            }
+        }
+
+        async function runDailySend() {
+            const btn = document.getElementById('btnDailyRun');
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1"></i> Running...';
+            btn.disabled = true;
+            if (window.lucide) window.lucide.createIcons();
+
+            showToast(`🚀 Daily run started — checking replies + sending pending emails... <button onclick="switchTopTab('logs')" class="ml-2 text-violet-400 hover:text-violet-300 font-bold underline">View Live Logs</button>`, true);
+
+            try {
+                const res = await fetch('/api/daily-run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ limit: 600, dry_run: false, project_id: currentProjectId })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                // Start progress polling
+                _pollTaskProgress({
+                    type: 'daily-run',
+                    projectId: currentProjectId,
+                    onComplete: () => {
+                        if (btn) {
+                            btn.innerHTML = origHtml;
+                            btn.disabled = false;
+                            if (window.lucide) window.lucide.createIcons();
+                        }
+                    }
+                });
+                showToast('🚀 Daily sequence run started in the background!');
+            } catch (e) {
+                showToast('❌ Daily run error: ' + e.message);
+                if (btn) {
+                    btn.innerHTML = origHtml;
+                    btn.disabled = false;
+                    if (window.lucide) window.lucide.createIcons();
+                }
+            }
+        }
+
+        async function sendSelectedSequences() {
+            const selectedIds = getSelectedContactIds();
+            if (!selectedIds.length) return alert('Select at least one sequence step to send.');
+
+            if (!confirm(`Are you sure you want to send strictly the ${selectedIds.length} selected sequence steps now?`)) return;
+
+            const btn = document.getElementById('btnSendSelected');
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-1"></i> Sending...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/sequences/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        project_id: currentProjectId,
+                        contact_ids: selectedIds,
+                        limit: 600
+                    })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                showToast(`✅ Successfully dispatched ${data.sent || 0} emails!`);
+                loadContent();
+                fetchSmtpCapacity();
+            } catch (e) {
+                showToast('❌ Send error: ' + e.message);
+            } finally {
+                btn.innerHTML = origHtml;
+                btn.disabled = false;
+                if (window.lucide) window.lucide.createIcons();
+            }
+        }
+
+        async function editSequenceStep(id) {
+            const seq = (window.latestSequences || []).find(s => s.id === id);
+            if (!seq) return;
+
+            openModal(`
+                <div class="p-6">
+                    <h2 class="text-lg font-semibold text-white mb-4">Edit Email Step ${seq.step_number}</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Subject</label>
+                            <input type="text" id="seq-edit-subject" value="${seq.subject.replace(/"/g, '&quot;')}" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">Body Text</label>
+                            <textarea id="seq-edit-body" rows="8" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white font-mono text-sm">${seq.body}</textarea>
+                        </div>
+                    </div>
+                    <div class="mt-6 flex gap-3">
+                        <button onclick="saveSequenceStep('${id}')" class="flex-1 bg-violet-600 hover:bg-violet-500 text-white font-medium py-2 rounded-lg">Save Changes</button>
+                        <button onclick="closeModal()" class="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 rounded-lg">Cancel</button>
+                    </div>
+                </div>
+            `);
+        }
+
+        async function saveSequenceStep(id) {
+            const subject = document.getElementById('seq-edit-subject').value;
+            const body = document.getElementById('seq-edit-body').value;
+
+            showToast('Saving sequence step...');
+            try {
+                const res = await apiFetch(`/api/sequences/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ subject, body })
+                });
+                if (!res.ok) throw new Error(await res.text());
+                showToast('✅ Saved sequence step');
+                closeModal();
+                loadContent();
+            } catch (e) {
+                showToast('❌ Error: ' + e.message);
+            }
+        }
+
+        // =========================================================================
+        // PROJECTS
+        // =========================================================================
+        async function loadProjectsTab(area) {
+            const res = await apiFetch('/api/projects/with-stats');
+            const data = await res.json();
+            const projects = data.projects || [];
+
+            area.innerHTML = `
+                <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-gray-800 text-gray-500 text-xs">
+                                <th class="text-left px-4 py-3 font-medium">Project Name</th>
+                                <th class="text-left px-4 py-3 font-medium">Date Added</th>
+                                <th class="text-left px-4 py-3 font-medium">Sender Group</th>
+                                <th class="text-left px-4 py-3 font-medium">Leads</th>
+                                <th class="text-left px-4 py-3 font-medium">With Email</th>
+                                <th class="text-left px-4 py-3 font-medium">With IG</th>
+                                <th class="text-right px-4 py-3 font-medium">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${projects.length ? projects.map(p => `
+                                <tr id="proj-row-${p.id}" class="border-b border-gray-800/50 last:border-0 hover:bg-gray-800/30">
+                                    <td class="px-4 py-3">
+                                        <span id="proj-name-${p.id}" class="font-medium text-white">${p.name || '\u2014'}</span>
+                                        <button onclick="renameProject('${p.id}', '${(p.name || '').replace(/'/g, "\\\\'")}')"
+                                            class="ml-2 text-gray-500 hover:text-violet-400 transition-colors" title="Rename">
+                                            <i data-lucide="pencil" class="w-3 h-3 inline"></i>
+                                        </button>
+                                    </td>
+                                    <td class="px-4 py-3 text-gray-400">${p.created_at ? new Date(p.created_at).toLocaleDateString() : '\u2014'}</td>
+                                    <td class="px-4 py-3">
+                                        <select onchange="changeSenderGroup('${p.id}', this.value)"
+                                            class="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-violet-500 transition-colors cursor-pointer">
+                                            <!-- Options will be populated and selected dynamically -->
+                                            <option value="${p.sender_group || 'all'}">${p.sender_group || 'all'}</option>
+                                        </select>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <span class="bg-violet-900/40 text-violet-300 text-xs px-2 py-0.5 rounded-full">${p.lead_count}</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <span class="bg-blue-900/40 text-blue-300 text-xs px-2 py-0.5 rounded-full">${p.email_count}</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <span class="bg-pink-900/40 text-pink-300 text-xs px-2 py-0.5 rounded-full">${p.ig_count}</span>
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        <button onclick="openKnowledgeBase('${p.id}', '${(p.name || '').replace(/'/g, "\\\\'")}')"
+                                            class="text-xs px-3 py-1.5 bg-gray-800 text-violet-400 border border-gray-700 rounded hover:bg-violet-900/40 hover:text-violet-300 hover:border-violet-800 transition-colors mr-2">
+                                            <i data-lucide="book-open" class="w-3 h-3 inline mr-1"></i> Context
+                                        </button>
+                                        <button onclick="deleteProject('${p.id}', '${(p.name || '').replace(/'/g, "\\\\'")}')"
+                                            class="text-xs px-3 py-1.5 bg-gray-800 text-red-400 border border-gray-700 rounded hover:bg-red-900/40 hover:text-red-300 hover:border-red-800 transition-colors">
+                                            <i data-lucide="trash-2" class="w-3 h-3 inline mr-1"></i> Delete
+                                        </button>
+                                    </td>
+                                </tr>
+                            `).join('') : `
+                                <tr><td colspan="7" class="text-center text-gray-500 py-8">No projects found</td></tr>
+                            `}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            lucide.createIcons();
+
+            // Fetch available groups and populate selects
+            try {
+                const grpRes = await fetch('/api/sender-groups');
+                const grpData = await grpRes.json();
+                const groups = grpData.groups || ["all"];
+
+                projects.forEach(p => {
+                    const select = document.querySelector(`#proj-row-${p.id} select`);
+                    if (select) {
+                        const current = p.sender_group || 'all';
+                        select.innerHTML = groups.map(g =>
+                            `<option value="${g}" ${g === current ? 'selected' : ''}>${g}</option>`
+                        ).join('');
+                    }
+                });
+            } catch (e) {
+                console.error("Failed to load sender groups:", e);
+            }
+        }
+
+        async function changeSenderGroup(projectId, newGroup) {
+            try {
+                const res = await fetch(`/api/projects/${projectId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sender_group: newGroup })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                showToast(`\u2705 Sender group updated to "${newGroup}"`);
+            } catch (e) {
+                showToast('\u274c Failed to update sender group: ' + e.message);
+                loadProjectsTab(document.getElementById('contentArea')); // refresh to revert
+            }
+        }
+
+        async function renameProject(projectId, currentName) {
+            const newName = prompt('Rename project:', currentName);
+            if (!newName || newName.trim() === currentName) return;
+            try {
+                const res = await apiFetch(`/api/projects/${projectId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName.trim() })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                // Update inline
+                const el = document.getElementById(`proj-name-${projectId}`);
+                if (el) el.textContent = newName.trim();
+                showToast(`\u2705 Renamed to "${newName.trim()}"`);
+                // Refresh dropdown
+                const projRes = await apiFetch('/api/projects');
+                const projData = await projRes.json();
+                populateProjectDropdown(projData.projects || []);
+            } catch (e) {
+                showToast('\u274c Rename failed: ' + e.message);
+            }
+        }
+
+        async function openKnowledgeBase(projectId, projectName) {
+            const modal = document.getElementById('knowledgeBaseModal');
+            const titleElem = document.getElementById('kbModalTitle');
+            const listElem = document.getElementById('kbItemsList');
+            const projectIdInput = document.getElementById('kbProjectId');
+
+            titleElem.textContent = `Knowledge Base: ${projectName}`;
+            projectIdInput.value = projectId;
+            listElem.innerHTML = '<div class="text-center py-8 text-gray-500">Loading context...</div>';
+            modal.classList.remove('hidden');
+
+            await refreshKnowledgeBaseList(projectId);
+        }
+
+        async function refreshKnowledgeBaseList(projectId) {
+            const listElem = document.getElementById('kbItemsList');
+            try {
+                const res = await apiFetch(`/api/projects/${projectId}/knowledge`);
+                const items = await res.json();
+
+                if (items.length === 0) {
+                    listElem.innerHTML = '<div class="text-center py-8 text-gray-500">No context items found for this project. Add some below!</div>';
+                } else {
+                    listElem.innerHTML = items.map(item => `
+                        <div class="p-4 bg-gray-800/50 border border-gray-700 rounded-lg mb-3">
+                            <div class="flex justify-between items-start mb-2">
+                                <h4 class="font-medium text-white">${item.title}</h4>
+                                <button onclick="deleteKnowledgeItem('${item.id}', '${projectId}')" class="text-gray-500 hover:text-red-400 transition-colors">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                            <p class="text-sm text-gray-400 whitespace-pre-wrap">${item.content}</p>
+                            <div class="mt-2 text-xs text-gray-500">
+                                <span class="bg-gray-700 px-2 py-0.5 rounded">${item.category}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                    lucide.createIcons();
+                }
+            } catch (e) {
+                listElem.innerHTML = `<div class="text-center py-8 text-red-400">Error loading context: ${e.message}</div>`;
+            }
+        }
+
+        async function addKnowledgeItem() {
+            const projectId = document.getElementById('kbProjectId').value;
+            const title = document.getElementById('kbTitleInput').value.trim();
+            const content = document.getElementById('kbContentInput').value.trim();
+            const category = document.getElementById('kbCategoryInput').value;
+
+            if (!title || !content) {
+                showToast('\u26a0\ufe0f Title and content are required');
+                return;
+            }
+
+            try {
+                const res = await apiFetch(`/api/projects/${projectId}/knowledge`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, content, category })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                showToast('\u2705 Added knowledge item');
+                document.getElementById('kbTitleInput').value = '';
+                document.getElementById('kbContentInput').value = '';
+                await refreshKnowledgeBaseList(projectId);
+            } catch (e) {
+                showToast('\u274c Failed to add item: ' + e.message);
+            }
+        }
+
+        async function deleteKnowledgeItem(itemId, projectId) {
+            if (!confirm('Are you sure you want to delete this context item?')) return;
+            try {
+                const res = await apiFetch(`/api/knowledge/${itemId}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                showToast('\u2705 Context item deleted');
+                await refreshKnowledgeBaseList(projectId);
+            } catch (e) {
+                showToast('\u274c Failed to delete item: ' + e.message);
+            }
+        }
+
+        async function deleteProject(projectId, projectName) {
+            if (!confirm(`\u26a0\ufe0f Delete "${projectName}"?\n\nThis will permanently delete ALL contacts and sequences in this project. This cannot be undone.`)) return;
+
+            try {
+                const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                showToast(`\ud83d\uddd1\ufe0f Project "${projectName}" deleted.`);
+                const row = document.getElementById(`proj-row-${projectId}`);
+                if (row) { row.style.opacity = '0'; setTimeout(() => row.remove(), 300); }
+
+                await loadProjectsTab(document.getElementById('contentArea'));
+                const projRes = await apiFetch('/api/projects');
+                const projData = await projRes.json();
+                populateProjectDropdown(projData.projects || []);
+            } catch (e) {
+                showToast('\u274c Delete failed: ' + e.message);
+            }
+        }
+
+        // =========================================================================
+        // SETTINGS
+        // =========================================================================
+        function loadSettings(area) {
+            area.innerHTML = `
+                <div class="max-w-2xl space-y-4">
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                        <h3 class="text-lg font-semibold text-white mb-4">API Configuration</h3>
+                        <p class="text-sm text-gray-400 mb-4">API keys are stored in the <code class="bg-gray-800 px-1.5 py-0.5 rounded text-violet-400">.env</code> file on your server. Update them there to change configuration.</p>
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between py-2 border-b border-gray-800">
+                                <span class="text-sm text-gray-300">Supabase</span>
+                                <span class="text-xs px-2 py-1 rounded bg-emerald-500/20 text-emerald-400">Connected</span>
+                            </div>
+                            <div class="flex items-center justify-between py-2 border-b border-gray-800">
+                                <span class="text-sm text-gray-300">Serper API</span>
+                                <span class="text-xs px-2 py-1 rounded bg-gray-700 text-gray-400">Add key to .env</span>
+                            </div>
+                            <div class="flex items-center justify-between py-2 border-b border-gray-800">
+                                <span class="text-sm text-gray-300">Hunter.io</span>
+                                <span class="text-xs px-2 py-1 rounded bg-gray-700 text-gray-400">Optional</span>
+                            </div>
+                            <div class="flex items-center justify-between py-2 border-b border-gray-800">
+                                <span class="text-sm text-gray-300">Perplexity</span>
+                                <span class="text-xs px-2 py-1 rounded bg-gray-700 text-gray-400">Add key to .env</span>
+                            </div>
+                            <div class="flex items-center justify-between py-2">
+                                <span class="text-sm text-gray-300">Gmail OAuth</span>
+                                <span class="text-xs px-2 py-1 rounded bg-gray-700 text-gray-400">Setup required</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function loadLiveLogs(area, actions) {
+            window.currentJobId = null;
+            if (window.logPollInterval) clearInterval(window.logPollInterval);
+
+            area.innerHTML = `
+                <div class="flex h-[calc(100vh-200px)] min-h-[500px] bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                    <!-- Job List -->
+                    <div class="w-72 border-r border-gray-800 flex flex-col">
+                        <div class="p-4 border-b border-gray-800 bg-gray-900/50 flex items-center justify-between">
+                            <h3 class="text-xs font-bold uppercase tracking-widest text-gray-400">Execution History</h3>
+                            <button onclick="loadLiveLogs(document.getElementById('contentArea'))" class="text-gray-500 hover:text-white transition-colors">
+                                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                        <div id="jobList" class="flex-1 overflow-y-auto p-2 space-y-1">
+                            <div class="p-8 text-center text-gray-600 italic text-xs">Loading execution history...</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Log Content -->
+                    <div class="flex-1 flex flex-col bg-black/20">
+                        <div id="logHeader" class="p-4 border-b border-gray-800 bg-gray-900/30 flex items-center justify-between">
+                            <div>
+                                <h3 id="currentJobName" class="text-sm font-semibold text-white">Select a job to view logs</h3>
+                                <div class="flex items-center gap-3 mt-1">
+                                    <span id="currentJobStatus" class="text-[10px] text-gray-400 uppercase tracking-wider">Ready</span>
+                                    <span id="currentJobTime" class="text-[10px] text-gray-600"></span>
+                                </div>
+                            </div>
+                            <div id="jobLiveIndicator" class="hidden flex items-center gap-2 px-2 py-1 bg-emerald-500/10 rounded border border-emerald-500/20">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                <span class="text-[10px] font-bold text-emerald-400 uppercase tracking-tighter">Live</span>
+                            </div>
+                        </div>
+                        
+                        <div id="logConsole" class="flex-1 p-5 font-mono text-[12px] overflow-y-auto bg-slate-950/90 text-emerald-400/90 leading-relaxed space-y-0.5 selection:bg-emerald-500/30">
+                            <div class="text-gray-700 select-none opacity-50">
+                                <p>> System ready.</p>
+                                <p>> Awaiting selection...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+
+            try {
+                const res = await apiFetch('/api/job-logs');
+                const data = await res.json();
+                const jobs = data.jobs || [];
+                const list = document.getElementById('jobList');
+
+                if (jobs.length === 0) {
+                    list.innerHTML = '<div class="p-8 text-center text-gray-600 text-xs text-balance">No background tasks recorded yet. Try running an email verification or send cycle.</div>';
+                    return;
+                }
+
+                list.innerHTML = jobs.map(j => {
+                    const date = new Date(j.started_at);
+                    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+                    let statusColor = 'bg-gray-500/20 text-gray-400';
+                    if (j.status === 'running') statusColor = 'bg-blue-500/20 text-blue-400 border border-blue-500/30';
+                    else if (j.status === 'completed') statusColor = 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+                    else if (j.status === 'failed') statusColor = 'bg-red-500/20 text-red-400 border border-red-500/30';
+
+                    return `
+                        <div onclick="selectJob('${j.id}', '${j.job_name}')" id="job-item-${j.id}" 
+                            class="job-item p-3 rounded-lg border border-transparent hover:border-gray-800 hover:bg-gray-800/40 cursor-pointer transition-all group relative">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <div class="text-[11px] font-bold text-gray-300 group-hover:text-white truncate mb-0.5">${j.job_name}</div>
+                                    <div class="text-[10px] text-gray-500 flex items-center gap-1.5 line-clamp-1">
+                                        <span>${dateStr}</span>
+                                        <span class="opacity-30">•</span>
+                                        <span>${timeStr}</span>
+                                    </div>
+                                </div>
+                                <span class="text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-tighter shrink-0 ${statusColor}">${j.status}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                // Auto-select first running job if exists
+                const running = jobs.find(j => j.status === 'running');
+                if (running) selectJob(running.id, running.job_name);
+                else if (jobs.length > 0) selectJob(jobs[0].id, jobs[0].job_name);
+
+            } catch (e) {
+                console.error("Failed to load jobs", e);
+                document.getElementById('jobList').innerHTML = `<div class="p-4 text-red-400 text-xs">Error loading history.</div>`;
+            }
+        }
+
+        window.currentJobId = null;
+        window.logPollInterval = null;
+
+        async function selectJob(id, name) {
+            window.currentJobId = id;
+
+            // UI Updates
+            document.querySelectorAll('.job-item').forEach(el => el.classList.remove('bg-gray-800/60', 'border-gray-700', 'ring-1', 'ring-violet-500/50'));
+            const activeEl = document.getElementById(`job-item-${id}`);
+            if (activeEl) activeEl.classList.add('bg-gray-800/60', 'border-gray-700', 'ring-1', 'ring-violet-500/50');
+
+            document.getElementById('currentJobName').textContent = name;
+            const consoleEl = document.getElementById('logConsole');
+            consoleEl.innerHTML = '<div class="text-gray-700 animate-pulse">> Connecting to event stream...</div>';
+
+            if (window.logPollInterval) clearInterval(window.logPollInterval);
+
+            await fetchJobEvents(id, true);
+            window.logPollInterval = setInterval(() => fetchJobEvents(id), 3000);
+        }
+
+        async function fetchJobEvents(id, isInitial = false) {
+            if (window.currentJobId !== id) return;
+
+            try {
+                const res = await apiFetch(`/api/job-logs/${id}/events`);
+                const data = await res.json();
+                const events = data.events || [];
+                const consoleEl = document.getElementById('logConsole');
+                const statusEl = document.getElementById('currentJobStatus');
+                const timeEl = document.getElementById('currentJobTime');
+                const liveIndicator = document.getElementById('jobLiveIndicator');
+
+                if (data.job) {
+                    statusEl.textContent = `Status: ${data.job.status}`;
+                    if (data.job.status === 'completed' && data.job.completed_at) {
+                        const duration = (new Date(data.job.completed_at) - new Date(data.job.started_at)) / 1000;
+                        timeEl.textContent = `Executed in ${duration.toFixed(1)}s`;
+                    } else {
+                        timeEl.textContent = `Started at ${new Date(data.job.started_at).toLocaleTimeString()}`;
+                    }
+
+                    if (data.job.status === 'running') liveIndicator.classList.remove('hidden');
+                    else liveIndicator.classList.add('hidden');
+                }
+
+                if (events.length === 0) {
+                    if (isInitial) consoleEl.innerHTML = '<div class="text-gray-700 italic">> No logs recorded for this task.</div>';
+                } else {
+                    const html = events.map(e => {
+                        const time = new Date(e.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+                        let color = 'text-gray-400';
+                        let prefix = '';
+
+                        if (e.level === 'warning') { color = 'text-amber-400/90'; prefix = '[WARN] '; }
+                        else if (e.level === 'error') { color = 'text-red-400'; prefix = '[ERR] '; }
+                        else if (e.level === 'success') { color = 'text-emerald-400 font-bold'; prefix = '[OK] '; }
+                        else if (e.level === 'job_start') { color = 'text-blue-400 border-l-2 border-blue-500 pl-2 my-2'; prefix = '>>> '; }
+                        else if (e.level === 'job_end') { color = 'text-emerald-400 border-l-2 border-emerald-500 pl-2 my-2'; prefix = '<<< '; }
+
+                        return `<div class="flex gap-4 hover:bg-white/5 transition-colors group">
+                            <span class="text-gray-600/50 flex-shrink-0 tabular-nums w-16 select-none">${time}</span>
+                            <span class="${color}">${prefix}${e.message}</span>
+                        </div>`;
+                    }).join('');
+
+                    const isAtBottom = consoleEl.scrollHeight - consoleEl.clientHeight <= consoleEl.scrollTop + 100;
+                    consoleEl.innerHTML = html;
+                    if (isAtBottom || isInitial) {
+                        consoleEl.scrollTop = consoleEl.scrollHeight;
+                    }
+                }
+
+                if (data.job && data.job.status !== 'running') {
+                    if (window.logPollInterval) {
+                        clearInterval(window.logPollInterval);
+                        window.logPollInterval = null;
+                        // Final status badge update in list if needed
+                        const badge = document.querySelector(`#job-item-${id} span.bg-blue-500\\\\/20`);
+                        if (badge) {
+                            badge.className = 'text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-tighter shrink-0 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+                            badge.textContent = 'completed';
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("Polling error", e);
+            }
+        }
+
+        // =========================================================================
+        // HELPERS
+        // =========================================================================
+        function statCard(icon, color, value, label) {
+            return `
+                <div class="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-${color}-500/20 rounded-lg">
+                            <i data-lucide="${icon}" class="w-5 h-5 text-${color}-400"></i>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-white">${value || 0}</p>
+                            <p class="text-xs text-gray-400">${label}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function actionBtn(icon, label, onclick) {
+            return `
+                <button onclick="${onclick}" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-xl p-4 text-center transition-all group">
+                    <i data-lucide="${icon}" class="w-6 h-6 text-gray-400 group-hover:text-violet-400 mx-auto mb-2 transition-colors"></i>
+                    <p class="text-xs text-gray-300 group-hover:text-white">${label}</p>
+                </button>
+            `;
+        }
+
+        function pipelineBar(c) {
+            const total = c.total || 1;
+            const segments = [
+                { label: 'New', count: c.new, color: 'bg-blue-500' },
+                { label: 'Enriched', count: c.enriched, color: 'bg-yellow-500' },
+                { label: 'Icebreaker', count: c.icebreaker_ready, color: 'bg-indigo-500' },
+                { label: 'In Seq', count: c.in_sequence, color: 'bg-orange-500' },
+                { label: 'Bounced', count: c.bounced, color: 'bg-red-500' },
+                { label: 'Done', count: c.completed, color: 'bg-emerald-500' }
+            ];
+            return `
+                <div class="flex rounded-full overflow-hidden h-4 bg-gray-800 mb-3">
+                    ${segments.map(s => `<div class="${s.color}" style="width:${((s.count || 0) / total * 100)}%"></div>`).join('')}
+                </div>
+                <div class="flex justify-between text-xs text-gray-400">
+                    ${segments.map(s => `<span>${s.label}: ${s.count || 0}</span>`).join('')}
+                </div>
+            `;
+        }
+
+        function emailPerfBar(e) {
+            const total = e.total || 1;
+            const getPct = (val) => (val || 0) / total * 100;
+            return `
+                <div class="space-y-2">
+                    <div class="flex items-center gap-2"><span class="text-xs text-gray-400 w-16">Pending</span><div class="flex-1 bg-gray-800 rounded-full h-3"><div class="bg-gray-500 h-3 rounded-full" style="width:${getPct(e.pending)}%"></div></div><span class="text-xs text-gray-500">${e.pending || 0}</span></div>
+                    <div class="flex items-center gap-2"><span class="text-xs text-gray-400 w-16">Sent</span><div class="flex-1 bg-gray-800 rounded-full h-3"><div class="bg-blue-500 h-3 rounded-full" style="width:${getPct(e.sent)}%"></div></div><span class="text-xs text-gray-500">${e.sent || 0}</span></div>
+                    <div class="flex items-center gap-2"><span class="text-xs text-gray-400 w-16">Opened</span><div class="flex-1 bg-gray-800 rounded-full h-3"><div class="bg-yellow-500 h-3 rounded-full" style="width:${getPct(e.opened)}%"></div></div><span class="text-xs text-gray-500">${e.opened || 0}</span></div>
+                    <div class="flex items-center gap-2"><span class="text-xs text-gray-400 w-16">Replied</span><div class="flex-1 bg-gray-800 rounded-full h-3"><div class="bg-emerald-500 h-3 rounded-full" style="width:${getPct(e.replied)}%"></div></div><span class="text-xs text-gray-500">${e.replied || 0}</span></div>
+                    <div class="flex items-center gap-2"><span class="text-xs text-gray-400 w-16">Bounced</span><div class="flex-1 bg-gray-800 rounded-full h-3"><div class="bg-red-500 h-3 rounded-full" style="width:${getPct(e.bounced)}%"></div></div><span class="text-xs text-gray-500">${e.bounced || 0}</span></div>
+                </div>
+            `;
+        }
+
+        // =========================================================================
+        // ACTIONS
+        // =========================================================================
+        function toggleSearchMode() {
+            const mode = document.getElementById('searchMode').value;
+            const locWrapper = document.getElementById('locationWrapper');
+            const queriesContainer = document.getElementById('queriesContainer');
+
+            if (mode === 'maps') {
+                locWrapper.classList.remove('hidden');
+                // Ensure only one query for maps mode
+                const inputs = queriesContainer.querySelectorAll('.search-query-input');
+                if (inputs.length > 1) {
+                    for (let i = 1; i < inputs.length; i++) inputs[i].closest('.relative').remove();
+                }
+                document.getElementById('addQueryBtn')?.classList.add('hidden');
+            } else {
+                locWrapper.classList.add('hidden');
+                document.getElementById('addQueryBtn')?.classList.remove('hidden');
+            }
+        }
+
+        async function runSearch() {
+            const mode = document.getElementById('searchMode').value;
+            const queries = [...document.querySelectorAll('.search-query-input')].map(i => i.value).filter(Boolean);
+            const location = document.getElementById('searchLocation')?.value || '';
+
+            if (!queries.length) return alert('Add at least one search query');
+            if (mode === 'maps' && !location) return alert('Please enter a location for Maps search');
+
+            const numResultsSelect = document.getElementById('numResultsSelect');
+            const limit = numResultsSelect ? parseInt(numResultsSelect.value, 10) : 100;
+
+            const btn = document.getElementById('searchBtn');
+            const status = document.getElementById('searchStatus');
+            btn.disabled = true;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Searching...';
+            status.classList.remove('hidden');
+
+            const apiEndpoint = mode === 'maps' ? '/api/contacts/apify-search' : '/api/contacts/search';
+            const body = mode === 'maps'
+                ? { query: queries[0], location, num_results: limit, project_id: currentProjectId }
+                : { queries, num_results: limit, project_id: currentProjectId };
+
+            status.innerHTML = `<div class="bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm rounded-lg p-3">
+                <i data-lucide="loader-2" class="w-4 h-4 animate-spin inline mr-2"></i>
+                Searching ${mode === 'maps' ? 'Google Maps via Apify' : 'Google via Serper'}... This may take a moment.
+            </div>`;
+            lucide.createIcons();
+
+            try {
+                const res = await apiFetch(apiEndpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+
+                if (data.error) throw new Error(data.error);
+
+                status.innerHTML = `<div class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm rounded-lg p-3">
+                    ✅ Search complete! Found ${data.total_results} results. Inserted ${data.inserted} new contacts (${data.skipped} duplicates skipped).
+                </div>`;
+                loadContent(); // Refresh list to show new contacts
+            } catch (e) {
+                status.innerHTML = `<div class="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg p-3">❌ Error: ${e.message}</div>`;
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="search" class="w-4 h-4"></i> Run Search';
+            lucide.createIcons();
+        }
+
+        // ── Enrichment Progress Monitor ──────────────────────────────────────────
+        // ── Unified Task Progress Monitor ────────────────────────────────────────
+        async function _pollTaskProgress(options) {
+            const {
+                type,           // 'enrichment', 'daily-run', 'icebreaker'
+                targetIds,      // for enrichment
+                total,          // total count
+                projectId,
+                intervalMs = 3000,
+                onComplete
+            } = options;
+
+            const bannerId = `taskProgressBanner_${type}`;
+            let banner = document.getElementById(bannerId);
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = bannerId;
+                // Offset multiple banners if active
+                const activeBanners = document.querySelectorAll('[id^="taskProgressBanner_"]').length;
+                const bottomOffset = 1.5 + (activeBanners * 6);
+                banner.className = `fixed bottom-${Math.round(bottomOffset)} right-6 z-50 bg-gray-900 border border-blue-500 rounded-2xl px-6 py-4 shadow-2xl min-w-[320px] animate-in fade-in slide-in-from-bottom-4 duration-300`;
+                document.body.appendChild(banner);
+            }
+
+            const icons = {
+                enrichment: 'sparkles',
+                'daily-run': 'send',
+                icebreaker: 'zap'
+            };
+            const labels = {
+                enrichment: 'Enriching Contacts...',
+                'daily-run': 'Daily Sequence Run...',
+                icebreaker: 'Generating Icebreakers...'
+            };
+            const icon = icons[type] || 'loader-2';
+            const label = labels[type] || 'Processing...';
+
+            const interval = setInterval(async () => {
+                try {
+                    let completed = 0;
+                    let currentTotal = total;
+
+                    if (type === 'enrichment' && targetIds) {
+                        const { data } = await supabase.from('contacts').select('id, status, email, instagram').in('id', targetIds);
+                        completed = (data || []).filter(c => c.status === 'enriched' || c.email || c.instagram).length;
+                    } else if (type === 'daily-run') {
+                        // For daily run, we check pending vs sent in the last hour/day for this project
+                        const { count: sent } = await supabase.from('email_sequences').select('id', { count: 'exact', head: true })
+                            .eq('project_id', projectId).eq('status', 'sent');
+                        const { count: pending } = await supabase.from('email_sequences').select('id', { count: 'exact', head: true })
+                            .eq('project_id', projectId).eq('status', 'pending');
+
+                        if (pending === 0) {
+                            completed = 1;
+                            currentTotal = 1;
+                        } else {
+                            completed = sent || 0;
+                            currentTotal = (sent || 0) + (pending || 0);
+                        }
+                    } else if (type === 'icebreaker') {
+                        const { data } = await supabase.from('contacts').select('id, icebreaker').eq('project_id', projectId);
+                        completed = (data || []).filter(c => c.icebreaker && c.icebreaker.length > 10).length;
+                        currentTotal = data?.length || 0;
+                    }
+
+                    const percent = currentTotal > 0 ? Math.round((completed / currentTotal) * 100) : 0;
+
+                    banner.innerHTML = `
+                        <div class="flex flex-col gap-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-semibold text-white flex items-center gap-2">
+                                    <i data-lucide="${icon}" class="w-4 h-4 text-blue-400 animate-pulse"></i>
+                                    ${label}
+                                </span>
+                                <span class="text-xs font-mono text-blue-400">${completed} / ${currentTotal}</span>
+                            </div>
+                            <div class="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden">
+                                <div class="bg-blue-500 h-full transition-all duration-500" style="width: ${percent || 0}%"></div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <p class="text-[10px] text-gray-500 italic">Running in background. Refresh for latest list.</p>
+                                <button onclick="switchTopTab('logs')" class="text-[10px] text-violet-400 hover:text-violet-300 font-bold underline flex items-center gap-1">
+                                    <i data-lucide="terminal" class="w-3 h-3"></i> View Live Logs
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    if (window.lucide) lucide.createIcons();
+
+                    // Completion check
+                    if (completed >= currentTotal && currentTotal > 0) {
+                        clearInterval(interval);
+                        banner.innerHTML = `
+                            <div class="flex items-center gap-3 text-emerald-400">
+                                <i data-lucide="check-circle" class="w-5 h-5"></i>
+                                <span class="text-sm font-semibold">${type.replace('-', ' ').toUpperCase()} Complete</span>
+                            </div>
+                        `;
+                        if (window.lucide) window.lucide.createIcons();
+                        setTimeout(() => banner.remove(), 5000);
+                        if (onComplete) onComplete();
+                        loadContent();
+                    }
+                } catch (e) {
+                    console.error('Progress monitor error:', e);
+                    clearInterval(interval);
+                    banner.remove();
+                }
+            }, intervalMs);
+        }
+
+
+        async function runCleanup() {
+            if (!currentProjectId) return alert('Select a project first');
+            if (!confirm('This will clean mashed names, remove junk domains (D7Finder, Glassdoor, etc.), and deduplicate contacts. Proceed?')) return;
+
+            showToast('🧹 Cleaning names and filtering junk...');
+            try {
+                const res = await apiFetch('/api/contacts/cleanup', {
+                    method: 'POST',
+                    body: JSON.stringify({ project_id: currentProjectId })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                showToast(`✅ ${data.message}`);
+                loadContent(); // Reload current view
+            } catch (e) {
+                alert('Cleanup failed: ' + e.message);
+            }
+        }
+
+        async function runEnrichment() {
+            const selectedIds = getSelectedContactIds();
+            let targetIds = selectedIds;
+
+            // If no selection, we need to know WHICH contacts the backend will pick (limit 500)
+            if (targetIds.length === 0) {
+                const { data } = await supabase
+                    .from('contacts')
+                    .select('id')
+                    .eq('project_id', currentProjectId)
+                    .eq('status', 'new')
+                    .limit(500);
+                targetIds = (data || []).map(c => c.id);
+            }
+
+            if (targetIds.length === 0) {
+                showToast('No new contacts to enrich!');
+                return;
+            }
+
+            const msg = `Enrich ${targetIds.length} contact(s) with emails and Instagram? This uses Serper API credits.`;
+            if (!confirm(msg)) return;
+
+            showToast('🚀 Enrichment started in background...');
+            try {
+                const body = JSON.stringify({ limit: 500, contact_ids: targetIds, project_id: currentProjectId });
+                const res = await apiFetch('/api/contacts/enrich', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+                const data = await res.json();
+
+                if (data.status === 'started') {
+                    _pollTaskProgress({ type: 'enrichment', targetIds, total: targetIds.length });
+                } else if (data.processed !== undefined) {
+                    showToast(`✅ Enriched ${data.processed} contacts`);
+                    loadContent();
+                }
+            } catch (e) { showToast('❌ ' + e.message); }
+        }
+
+        function showCompanyContextModal(companyNameEnc, ctxString) {
+            try {
+                const ctx = JSON.parse(decodeURIComponent(ctxString));
+                const companyName = decodeURIComponent(companyNameEnc);
+                document.getElementById('modalContent').innerHTML = `
+                    <div class="p-5 border-b border-gray-800 flex items-center justify-between">
+                        <h2 class="text-lg font-semibold text-white flex items-center gap-2">
+                            <i data-lucide="building-2" class="w-5 h-5 text-fuchsia-400"></i>
+                            ${companyName || 'Company Context'}
+                        </h2>
+                        <button onclick="closeModal()" class="text-gray-400 hover:text-white transition-colors">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="p-5 space-y-4 text-sm text-gray-300">
+                        <div class="bg-gray-800/50 p-3 rounded-lg border border-gray-700">
+                            <h3 class="text-fuchsia-400 font-medium mb-1 uppercase text-xs tracking-wider">Mission & About</h3>
+                            <p>${ctx.mission_and_about}</p>
+                        </div>
+                        <div class="bg-gray-800/50 p-3 rounded-lg border border-gray-700">
+                            <h3 class="text-fuchsia-400 font-medium mb-1 uppercase text-xs tracking-wider">Offerings & Positioning</h3>
+                            <p>${ctx.offerings_and_positioning}</p>
+                        </div>
+                        <div class="bg-gray-800/50 p-3 rounded-lg border border-gray-700">
+                            <h3 class="text-fuchsia-400 font-medium mb-1 uppercase text-xs tracking-wider">Process & Differentiation</h3>
+                            <p>${ctx.process_and_differentiation}</p>
+                        </div>
+                        <div class="bg-gray-800/50 p-3 rounded-lg border border-gray-700">
+                            <h3 class="text-fuchsia-400 font-medium mb-1 uppercase text-xs tracking-wider">Proof of Success</h3>
+                            <p>${ctx.proof_of_success}</p>
+                        </div>
+                    </div>
+                    <div class="p-4 bg-gray-900 border-t border-gray-800 flex justify-end gap-2">
+                        <button onclick="closeModal()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors font-medium text-sm">Close</button>
+                    </div>
+                `;
+                document.getElementById('modalOverlay').classList.remove('hidden');
+                document.getElementById('modalOverlay').classList.add('flex');
+                if (window.lucide) lucide.createIcons();
+            } catch (e) {
+                showToast('❌ Error loading context: ' + e.message);
+            }
+        }
+
+        async function runCompanyEnrichment() {
+            const selectedIds = getSelectedContactIds();
+            let targetIds = selectedIds;
+
+            if (targetIds.length === 0) {
+                const { data } = await supabase
+                    .from('contacts')
+                    .select('id')
+                    .eq('project_id', currentProjectId)
+                    .limit(500);
+                targetIds = (data || []).map(c => c.id);
+            }
+
+            if (targetIds.length === 0) {
+                showToast('No new contacts to enrich!');
+                return;
+            }
+
+            const msg = `Enrich ${targetIds.length} contact(s) with deep company data using Jina and Gemini?`;
+            if (!confirm(msg)) return;
+
+            showToast('🏢 Company enrichment started in background...');
+            try {
+                const body = JSON.stringify({ limit: 500, contact_ids: targetIds, project_id: currentProjectId });
+                const res = await apiFetch('/api/contacts/enrich_company', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+                const data = await res.json();
+
+                if (data.status === 'started') {
+                    _pollTaskProgress({ type: 'enrichment', targetIds, total: targetIds.length });
+                }
+            } catch (e) { showToast('❌ ' + e.message); }
+        }
+
+        async function runCamoufoxEnrichment() {
+            const selectedIds = getSelectedContactIds();
+            let targetIds = selectedIds;
+
+            // If no selection, target contacts without emails
+            if (targetIds.length === 0) {
+                const { data } = await supabase
+                    .from('contacts')
+                    .select('id')
+                    .eq('project_id', currentProjectId)
+                    .is('email', null)
+                    .limit(200);
+                targetIds = (data || []).map(c => c.id);
+            }
+
+            if (targetIds.length === 0) {
+                showToast('No contacts without emails to enrich!');
+                return;
+            }
+
+            const msg = `🕵️ Stealthy Enrich ${targetIds.length} contact(s) using Camoufox?\n\nScrapes each contact's website directly for emails and Instagram. Slower but bypasses Cloudflare. Falls back to Serper if no website is stored.`;
+            if (!confirm(msg)) return;
+
+            showToast('🕵️ Camoufox stealth enrichment started...');
+            try {
+                const body = JSON.stringify({ contact_ids: targetIds });
+                const res = await apiFetch('/api/contacts/camoufox-enrich', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body
+                });
+                const data = await res.json();
+                if (data.status === 'started') {
+                    showToast(`🕵️ Scraping ${targetIds.length} contacts in background—check back in a few minutes!`);
+                    _pollTaskProgress({ type: 'enrichment', targetIds, total: targetIds.length });
+                } else if (data.error) {
+                    showToast('❌ ' + data.error);
+                }
+            } catch (e) { showToast('❌ ' + e.message); }
+        }
+
+        async function runIcebreakers() {
+            const ids = getSelectedContactIds();
+            const msg = ids.length > 0
+                ? `Generate icebreakers for ${ids.length} selected contacts?`
+                : 'Generate icebreakers for ALL enriched contacts in this project?';
+
+            if (!confirm(msg + ' This uses Perplexity API.')) return;
+
+            showToast('Generating icebreakers in background...');
+            try {
+                const bodyPayload = ids.length > 0 ? { contact_ids: ids, limit: 1000 } : { limit: 1000 };
+                const res = await apiFetch('/api/contacts/icebreaker', {
+                    method: 'POST',
+                    body: JSON.stringify(bodyPayload)
+                });
+                const data = await res.json();
+                showToast(`✅ ${data.message || 'Started background generation'}`);
+                _pollTaskProgress({ type: 'icebreaker', projectId: currentProjectId });
+                loadContent(); // Refresh to show "in progress" state
+            } catch (e) { showToast('❌ ' + e.message); }
+        }
+
+        async function runSendEmails() {
+            if (!confirm('Send pending scheduled emails via Gmail? Make sure Gmail OAuth is configured.')) return;
+            showToast('Sending emails...');
+            try {
+                const res = await apiFetch('/api/sequences/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"limit":50}' });
+                const data = await res.json();
+                showToast(`✅ Sent ${data.sent} emails (${data.errors} errors)`);
+                loadContent();
+            } catch (e) { showToast('❌ ' + e.message); }
+        }
+
+        async function seedTemplates() {
+            showToast('Seeding templates...');
+            try {
+                const res = await apiFetch('/api/seed-templates', { method: 'POST' });
+                const data = await res.json();
+                showToast(`✅ ${data.message}`);
+                loadContent();
+            } catch (e) { showToast('❌ ' + e.message); }
+        }
+
+        // ── Sequence progress - localStorage backed, survives page reload ──
+
+        function _showSeqBanner(ids) {
+            let b = document.getElementById('seqProgressBanner');
+            if (!b) {
+                b = document.createElement('div');
+                b.id = 'seqProgressBanner';
+                b.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 border border-violet-500 rounded-2xl px-6 py-4 shadow-2xl min-w-[380px]';
+                document.body.appendChild(b);
+            }
+            b.innerHTML = `
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm text-white font-semibold flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full bg-violet-500 animate-pulse"></span> Creating sequences...</span>
+                    <span id="seqProgressCount" class="text-xs text-violet-400 font-mono">0 / ${ids.length}</span>
+                </div>
+                <div class="w-full bg-gray-800 rounded-full h-2 mb-2">
+                    <div id="seqProgressBar" class="bg-gradient-to-r from-violet-500 to-indigo-500 h-2 rounded-full transition-all duration-700" style="width:2%"></div>
+                </div>
+                <p class="text-xs text-gray-500">Each step is AI-paraphrased — safe to navigate away.</p>
+            `;
+            return b;
+        }
+
+        function _pollSeqProgress(ids) {
+            const total = ids.length;
+            const idSet = new Set(ids);
+            let done = false;
+            const poll = setInterval(async () => {
+                try {
+                    const r = await apiFetch('/api/sequences');
+                    const d = await r.json();
+                    const created = new Set((d.sequences || []).filter(s => idSet.has(s.contact_id)).map(s => s.contact_id)).size;
+                    const pct = Math.max(2, Math.min(100, Math.round((created / total) * 100)));
+                    const bar = document.getElementById('seqProgressBar');
+                    const cnt = document.getElementById('seqProgressCount');
+                    if (bar) bar.style.width = pct + '%';
+                    if (cnt) cnt.textContent = `${created} / ${total}`;
+                    if (created >= total) {
+                        clearInterval(poll);
+                        done = true;
+                        localStorage.removeItem('seqJob');
+                        const b = document.getElementById('seqProgressBanner');
+                        if (b) b.innerHTML = `<div class="flex items-center justify-between"><span class="text-emerald-400 font-semibold">\u2705 ${created} sequence(s) ready!</span><button onclick="document.getElementById('seqProgressBanner').remove()" class="text-gray-500 hover:text-white ml-4 text-xl leading-none">&times;</button></div>`;
+                        setTimeout(() => loadContent(), 600);
+                    }
+                } catch (_) { }
+            }, 6000);
+            setTimeout(() => {
+                if (!done) {
+                    clearInterval(poll);
+                    localStorage.removeItem('seqJob');
+                    const b = document.getElementById('seqProgressBanner');
+                    if (b) b.innerHTML = `<div class="flex items-center justify-between"><span class="text-yellow-400 font-semibold">\u26a0\ufe0f Still running \u2014 refresh to check.</span><button onclick="document.getElementById('seqProgressBanner').remove()" class="text-gray-500 hover:text-white ml-4 text-xl">&times;</button></div>`;
+                    loadContent();
+                }
+            }, 300000);
+        }
+
+        function resumeSeqProgressIfActive() {
+            try {
+                const job = JSON.parse(localStorage.getItem('seqJob') || 'null');
+                if (!job || !Array.isArray(job.ids) || !job.ids.length) return;
+                if (Date.now() - (job.started || 0) > 300000) { localStorage.removeItem('seqJob'); return; }
+                _showSeqBanner(job.ids);
+                _pollSeqProgress(job.ids);
+            } catch (_) { }
+        }
+
+        async function createSequencesForSelected() {
+            const ids = getSelectedContactIds();
+            if (!ids.length) return alert('Select contacts from the table to create sequences for them.');
+            if (!confirm(`Create sequences for ${ids.length} contact(s)?\n\nEach step is AI-paraphrased (~15-30s per contact). You can navigate away safely.`)) return;
+
+            localStorage.setItem('seqJob', JSON.stringify({ ids, started: Date.now() }));
+            _showSeqBanner(ids);
+            try {
+                const res = await apiFetch('/api/sequences/create', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contact_ids: ids })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                _pollSeqProgress(ids);
+            } catch (e) {
+                const b = document.getElementById('seqProgressBanner');
+                if (b) b.remove();
+                localStorage.removeItem('seqJob');
+                showToast('\u274c ' + e.message);
+            }
+        }
+
+        function toggleSeqSelectAll() {
+            const all = document.getElementById('seqSelectAll');
+            document.querySelectorAll('.seq-check').forEach(cb => cb.checked = all.checked);
+            updateSeqDeleteBtn();
+        }
+
+        function updateSeqDeleteBtn() {
+            const checked = [...document.querySelectorAll('.seq-check:checked')];
+            const btn = document.getElementById('btnDeleteSelectedSeq');
+            if (btn) {
+                if (checked.length > 0) {
+                    btn.classList.remove('hidden');
+                    btn.textContent = `Delete Selected (${checked.length})`;
+                } else {
+                    btn.classList.add('hidden');
+                }
+                if (window.lucide) window.lucide.createIcons();
+            }
+        }
+
+        async function deleteSelectedSeqs() {
+            const ids = [...document.querySelectorAll('.seq-check:checked')].map(cb => cb.value);
+            if (!ids.length) return;
+            if (!confirm(`Delete sequences for ${ids.length} contact(s)? Their status will be reset.`)) return;
+            showToast('Deleting...');
+            try {
+                let errors = 0;
+                for (const cid of ids) {
+                    const res = await apiFetch(`/api/sequences/contact/${cid}`, { method: 'DELETE' });
+                    const d = await res.json();
+                    if (d.error) errors++;
+                }
+                showToast(errors ? `⚠️ Done with ${errors} error(s)` : `✅ Deleted ${ids.length} sequence(s)`);
+                loadContent();
+            } catch (e) { showToast('❌ ' + e.message); }
+        }
+
+        async function deleteContactSequence(contactId) {
+            if (!confirm('Delete all sequence steps for this contact? Their status will be reset so you can re-sequence them.')) return;
+            try {
+                const res = await apiFetch(`/api/sequences/contact/${contactId}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                showToast('✅ Sequence deleted');
+                loadContent();
+            } catch (e) { showToast('❌ ' + e.message); }
+        }
+
+        async function deleteContact(id) {
+            if (!confirm('Delete this contact?')) return;
+            try {
+                await apiFetch(`/api/contacts/${id}`, { method: 'DELETE' });
+                document.getElementById(`row-${id}`)?.remove();
+                showToast('Contact deleted');
+            } catch (e) { showToast('❌ ' + e.message); }
+        }
+
+        async function deleteSelectedContacts() {
+            const ids = getSelectedContactIds();
+            if (!ids.length) return alert('Select contacts to delete first.');
+
+            if (!confirm(`Are you sure you want to permanently delete ${ids.length} contacts?`)) return;
+
+            showToast('Deleting contacts...');
+            try {
+                const res = await apiFetch('/api/contacts/bulk-delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contact_ids: ids })
+                });
+
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                showToast(`✅ Deleted ${data.deleted} contacts`);
+                loadContent(); // Reload the table
+            } catch (e) {
+                showToast('❌ ' + e.message);
+            }
+        }
+
+        async function showContactDetail(id) {
+            const res = await apiFetch(`/api/contacts/${id}`);
+            const data = await res.json();
+            const c = data.contact;
+
+            openModal(`
+                <div class="p-6">
+                    <div class="flex items-center gap-4 mb-6">
+                        <div class="w-14 h-14 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 flex items-center justify-center text-white text-xl font-bold">${(c.name || '?')[0].toUpperCase()}</div>
+                        <div>
+                            <h2 class="text-lg font-semibold text-white">${c.name}</h2>
+                            <span class="status-${c.status} text-xs px-2 py-1 rounded-full">${c.status}</span>
+                        </div>
+                    </div>
+                    <div class="space-y-4">
+                        ${field('Bio', c.bio)}
+                        ${field('Email', c.email)}
+                        ${field('LinkedIn', c.linkedin_url ? `<a href="${c.linkedin_url}" target="_blank" class="text-blue-400 hover:underline">${c.linkedin_url}</a>` : '—')}
+                        ${field('Instagram', c.instagram ? `<a href="https://instagram.com/${c.instagram.replace('@', '')}" target="_blank" class="text-pink-400 hover:underline hover:text-pink-300">${c.instagram}</a>` : '—')}
+                        ${field('Source', c.source)}
+                        ${c.icebreaker ? `<div><label class="text-xs text-gray-400 block mb-1">Icebreaker</label><div class="bg-gray-800 border border-gray-700 rounded-lg p-3 text-sm text-gray-200 italic">"${c.icebreaker}"</div></div>` : ''}
+                    </div>
+                    <div class="mt-6 flex gap-2">
+                        <button onclick="closeModal()" class="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-sm font-medium">Close</button>
+                    </div>
+                </div>
+            `);
+        }
+
+        function field(label, value) {
+            return `<div><label class="text-xs text-gray-400 block mb-0.5">${label}</label><p class="text-sm text-gray-200">${value || '—'}</p></div>`;
+        }
+
+        // =========================================================================
+        // MODALS
+        // =========================================================================
+        function openModal(html) {
+            document.getElementById('modalContent').innerHTML = html;
+            document.getElementById('modalOverlay').classList.remove('hidden');
+            document.getElementById('modalOverlay').classList.add('flex');
+            lucide.createIcons();
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').classList.add('hidden');
+            document.getElementById('modalOverlay').classList.remove('flex');
+        }
+
+        function showSearchModal() {
+            switchTopTab('search');
+        }
+
+        /** Simple Toast Notification */
+        function showToast(message, duration = 3000) {
+            let toast = document.getElementById('toast-notification');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'toast-notification';
+                toast.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 bg-gray-800 border border-violet-500/50 text-white text-sm font-medium rounded-full shadow-2xl z-[100] transition-all duration-300 pointer-events-none opacity-0 translate-y-4';
+                document.body.appendChild(toast);
+            }
+
+            toast.textContent = message;
+            toast.classList.remove('opacity-0', 'translate-y-4');
+            toast.classList.add('opacity-100', 'translate-y-0');
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'translate-y-4');
+            }, duration);
+        }
+
+        // =========================================================================
+        // SEARCH TAB
+        // =========================================================================
+        function toggleSearchMode() {
+            const mode = document.getElementById('searchMode').value;
+            const wrapper = document.getElementById('locationWrapper');
+            const addBtn = document.getElementById('addQueryBtn');
+            const queries = document.getElementById('queryList');
+
+            if (mode === 'maps') {
+                wrapper.classList.remove('hidden');
+                addBtn.classList.add('hidden');
+                // Limit to 1 query for maps search
+                const rows = queries.querySelectorAll('.flex');
+                if (rows.length > 1) {
+                    for (let i = 1; i < rows.length; i++) rows[i].remove();
+                }
+            } else {
+                wrapper.classList.add('hidden');
+                addBtn.classList.remove('hidden');
+            }
+        }
+
+        async function loadSearch(area, actions) {
+            const isPeopleMode = (window._searchMode || 'people') === 'people';
+
+            area.innerHTML = `
+                <div class="max-w-2xl">
+                    <!-- Mode toggle -->
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex gap-2 bg-gray-900 border border-gray-800 rounded-xl p-1.5 w-fit">
+                            <button id="modePeople"
+                                onclick="window._searchMode='people'; loadContent()"
+                                class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${isPeopleMode
+                    ? 'bg-violet-600 text-white shadow'
+                    : 'text-gray-400 hover:text-white'}">
+                                👤 People
+                            </button>
+                            <button id="modeBiz"
+                                onclick="window._searchMode='business'; loadContent()"
+                                class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${!isPeopleMode
+                    ? 'bg-cyan-600 text-white shadow'
+                    : 'text-gray-400 hover:text-white'}">
+                                🏢 Businesses
+                            </button>
+                        </div>
+
+                        ${!isPeopleMode ? `
+                        <select id="searchMode" onchange="toggleSearchMode()" class="bg-gray-800 border border-gray-700 rounded-lg text-xs px-3 py-1.5 text-white outline-none focus:border-cyan-500 shadow-sm">
+                            <option value="web">Web Search (Serper)</option>
+                            <option value="maps">Maps Search (Apify)</option>
+                        </select>
+                        ` : ''}
+                    </div>
+
+                    <div class="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl">
+                        ${isPeopleMode ? `
+                            <h2 class="text-base font-semibold text-white mb-1">Search B2B Leads (Apify)</h2>
+                            <p class="text-xs text-gray-400 mb-5">Find verified decision makers. Provide job titles and locations to start.</p>
+                            
+                            <div class="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Contact Job Title(s)</label>
+                                    <input type="text" id="apify-job-titles" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm focus:border-violet-500 focus:outline-none" placeholder="e.g. Founder, CEO (comma sep)">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Location (Cmd/Ctrl for multiple)</label>
+                                    <select multiple id="apify-location" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm focus:border-violet-500 focus:outline-none h-24">
+            <option value="united states">United States</option>
+            <option value="germany">Germany</option>
+            <option value="india">India</option>
+            <option value="united kingdom">United Kingdom</option>
+            <option value="russia">Russia</option>
+            <option value="france">France</option>
+            <option value="china">China</option>
+            <option value="canada">Canada</option>
+            <option value="netherlands">Netherlands</option>
+            <option value="mexico">Mexico</option>
+            <option value="belgium">Belgium</option>
+            <option value="japan">Japan</option>
+            <option value="brazil">Brazil</option>
+            <option value="australia">Australia</option>
+            <option value="poland">Poland</option>
+            <option value="thailand">Thailand</option>
+            <option value="sweden">Sweden</option>
+            <option value="portugal">Portugal</option>
+            <option value="spain">Spain</option>
+            <option value="czech republic">Czech Republic</option>
+            <option value="taiwan">Taiwan</option>
+            <option value="south africa">South Africa</option>
+            <option value="colombia">Colombia</option>
+            <option value="italy">Italy</option>
+            <option value="vietnam">Vietnam</option>
+            <option value="nigeria">Nigeria</option>
+            <option value="singapore">Singapore</option>
+            <option value="hong kong">Hong Kong</option>
+            <option value="ireland">Ireland</option>
+            <option value="israel">Israel</option>
+            <option value="switzerland">Switzerland</option>
+            <option value="turkey">Turkey</option>
+            <option value="romania">Romania</option>
+            <option value="south korea">South Korea</option>
+            <option value="indonesia">Indonesia</option>
+            <option value="united arab emirates">United Arab Emirates</option>
+            <option value="saudi arabia">Saudi Arabia</option>
+            <option value="austria">Austria</option>
+            <option value="philippines">Philippines</option>
+            <option value="peru">Peru</option>
+            <option value="malaysia">Malaysia</option>
+            <option value="argentina">Argentina</option>
+            <option value="ukraine">Ukraine</option>
+            <option value="ghana">Ghana</option>
+            <option value="denmark">Denmark</option>
+            <option value="norway">Norway</option>
+            <option value="finland">Finland</option>
+            <option value="puerto rico">Puerto Rico</option>
+            <option value="qatar">Qatar</option>
+            <option value="macau">Macau</option>
+            <option value="new zealand">New Zealand</option>
+            <option value="hungary">Hungary</option>
+            <option value="luxembourg">Luxembourg</option>
+            <option value="kuwait">Kuwait</option>
+            <option value="egypt">Egypt</option>
+            <option value="slovakia">Slovakia</option>
+            <option value="greece">Greece</option>
+            <option value="kenya">Kenya</option>
+            <option value="bulgaria">Bulgaria</option>
+            <option value="costa rica">Costa Rica</option>
+            <option value="chile">Chile</option>
+            <option value="venezuela">Venezuela</option>
+            <option value="afghanistan">Afghanistan</option>
+            <option value="bangladesh">Bangladesh</option>
+            <option value="malta">Malta</option>
+            <option value="guatemala">Guatemala</option>
+            <option value="pakistan">Pakistan</option>
+            <option value="lithuania">Lithuania</option>
+            <option value="panama">Panama</option>
+            <option value="morocco">Morocco</option>
+            <option value="republic of indonesia">Republic Of Indonesia</option>
+            <option value="uruguay">Uruguay</option>
+            <option value="serbia">Serbia</option>
+            <option value="bolivia">Bolivia</option>
+            <option value="angola">Angola</option>
+            <option value="dominican republic">Dominican Republic</option>
+            <option value="ecuador">Ecuador</option>
+            <option value="oman">Oman</option>
+            <option value="jamaica">Jamaica</option>
+            <option value="zambia">Zambia</option>
+            <option value="lebanon">Lebanon</option>
+            <option value="tanzania">Tanzania</option>
+            <option value="jordan">Jordan</option>
+            <option value="algeria">Algeria</option>
+            <option value="gibraltar">Gibraltar</option>
+            <option value="paraguay">Paraguay</option>
+            <option value="cambodia">Cambodia</option>
+            <option value="uganda">Uganda</option>
+            <option value="mozambique">Mozambique</option>
+            <option value="ethiopia">Ethiopia</option>
+            <option value="belarus">Belarus</option>
+            <option value="republic of the union of myanmar">Republic Of The Union Of Myanmar</option>
+            <option value="croatia">Croatia</option>
+            <option value="jersey">Jersey</option>
+            <option value="iraq">Iraq</option>
+            <option value="isle of man">Isle Of Man</option>
+            <option value="el salvador">El Salvador</option>
+            <option value="estonia">Estonia</option>
+            <option value="latvia">Latvia</option>
+            <option value="côte d'ivoire">Côte D'Ivoire</option>
+            <option value="tunisia">Tunisia</option>
+            <option value="sierra leone">Sierra Leone</option>
+            <option value="senegal">Senegal</option>
+            <option value="sri lanka">Sri Lanka</option>
+            <option value="cyprus">Cyprus</option>
+            <option value="kazakhstan">Kazakhstan</option>
+            <option value="guernsey">Guernsey</option>
+            <option value="bermuda">Bermuda</option>
+            <option value="mali">Mali</option>
+            <option value="honduras">Honduras</option>
+            <option value="bahrain">Bahrain</option>
+            <option value="slovenia">Slovenia</option>
+            <option value="papua new guinea">Papua New Guinea</option>
+            <option value="iceland">Iceland</option>
+            <option value="mauritius">Mauritius</option>
+            <option value="iran">Iran</option>
+            <option value="niger">Niger</option>
+            <option value="rwanda">Rwanda</option>
+            <option value="moldova">Moldova</option>
+            <option value="democratic republic of the congo">Democratic Republic Of The Congo</option>
+            <option value="liechtenstein">Liechtenstein</option>
+            <option value="fiji">Fiji</option>
+            <option value="kyrgyzstan">Kyrgyzstan</option>
+            <option value="azerbaijan">Azerbaijan</option>
+            <option value="madagascar">Madagascar</option>
+            <option value="trinidad and tobago">Trinidad And Tobago</option>
+            <option value="lesotho">Lesotho</option>
+            <option value="nicaragua">Nicaragua</option>
+            <option value="cameroon">Cameroon</option>
+            <option value="barbados">Barbados</option>
+            <option value="armenia">Armenia</option>
+            <option value="haiti">Haiti</option>
+            <option value="maldives">Maldives</option>
+            <option value="guam">Guam</option>
+            <option value="laos">Laos</option>
+            <option value="nepal">Nepal</option>
+            <option value="brunei">Brunei</option>
+            <option value="reunion">Reunion</option>
+            <option value="macedonia (fyrom)">Macedonia (Fyrom)</option>
+            <option value="swaziland">Swaziland</option>
+            <option value="liberia">Liberia</option>
+            <option value="uzbekistan">Uzbekistan</option>
+            <option value="sudan">Sudan</option>
+            <option value="anguilla">Anguilla</option>
+            <option value="cuba">Cuba</option>
+            <option value="cayman islands">Cayman Islands</option>
+            <option value="seychelles">Seychelles</option>
+            <option value="saint kitts and nevis">Saint Kitts And Nevis</option>
+            <option value="suriname">Suriname</option>
+            <option value="bosnia and herzegovina">Bosnia And Herzegovina</option>
+            <option value="malawi">Malawi</option>
+            <option value="the bahamas">The Bahamas</option>
+            <option value="botswana">Botswana</option>
+            <option value="syria">Syria</option>
+            <option value="burundi">Burundi</option>
+            <option value="guadeloupe">Guadeloupe</option>
+            <option value="namibia">Namibia</option>
+            <option value="burkina faso">Burkina Faso</option>
+            <option value="somalia">Somalia</option>
+            <option value="greenland">Greenland</option>
+            <option value="equatorial guinea">Equatorial Guinea</option>
+            <option value="chad">Chad</option>
+            <option value="monaco">Monaco</option>
+            <option value="republic of the congo">Republic Of The Congo</option>
+            <option value="u.s. virgin islands">U.S. Virgin Islands</option>
+            <option value="mayotte">Mayotte</option>
+            <option value="french polynesia">French Polynesia</option>
+            <option value="french guiana">French Guiana</option>
+            <option value="andorra">Andorra</option>
+            <option value="new caledonia">New Caledonia</option>
+            <option value="central african republic">Central African Republic</option>
+            <option value="myanmar (burma)">Myanmar (Burma)</option>
+            <option value="belize">Belize</option>
+            <option value="aland islands">Aland Islands</option>
+            <option value="solomon islands">Solomon Islands</option>
+            <option value="kosovo">Kosovo</option>
+            <option value="gabon">Gabon</option>
+            <option value="benin">Benin</option>
+            <option value="bonaire, sint eustatius and saba">Bonaire, Sint Eustatius And Saba</option>
+            <option value="martinique">Martinique</option>
+            <option value="tonga">Tonga</option>
+            <option value="south sudan">South Sudan</option>
+            <option value="cook islands">Cook Islands</option>
+            <option value="georgia">Georgia</option>
+            <option value="mauritania">Mauritania</option>
+            <option value="turkmenistan">Turkmenistan</option>
+            <option value="libya">Libya</option>
+            <option value="falkland islands (islas malvinas)">Falkland Islands (Islas Malvinas)</option>
+            <option value="bhutan">Bhutan</option>
+            <option value="tajikistan">Tajikistan</option>
+            <option value="northern mariana islands">Northern Mariana Islands</option>
+            <option value="western sahara">Western Sahara</option>
+            <option value="guyana">Guyana</option>
+            <option value="dominica">Dominica</option>
+            <option value="vanuatu">Vanuatu</option>
+            <option value="kiribati">Kiribati</option>
+            <option value="togo">Togo</option>
+            <option value="nauru">Nauru</option>
+            <option value="samoa">Samoa</option>
+            <option value="mongolia">Mongolia</option>
+            <option value="myanmar">Myanmar</option>
+            <option value="yemen">Yemen</option>
+            <option value="albania">Albania</option>
+            <option value="montenegro">Montenegro</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">City (leave Location empty if using)</label>
+                                    <input type="text" id="apify-city" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm focus:border-violet-500 focus:outline-none" placeholder="e.g. Mumbai, New York">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Company Industry</label>
+                                    <select id="apify-industry" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                        <option value="">Any Industry (Optional)</option>
+                                        <option value="information technology & services">Information Technology & Services</option>
+                                        <option value="construction">Construction</option>
+                                        <option value="marketing & advertising">Marketing & Advertising</option>
+                                        <option value="real estate">Real Estate</option>
+                                        <option value="health, wellness & fitness">Health, Wellness & Fitness</option>
+                                        <option value="management consulting">Management Consulting</option>
+                                        <option value="computer software">Computer Software</option>
+                                        <option value="internet">Internet</option>
+                                        <option value="retail">Retail</option>
+                                        <option value="financial services">Financial Services</option>
+                                        <option value="consumer services">Consumer Services</option>
+                                        <option value="hospital & health care">Hospital & Health Care</option>
+                                        <option value="automotive">Automotive</option>
+                                        <option value="restaurants">Restaurants</option>
+                                        <option value="education management">Education Management</option>
+                                        <option value="food & beverages">Food & Beverages</option>
+                                        <option value="design">Design</option>
+                                        <option value="hospitality">Hospitality</option>
+                                        <option value="accounting">Accounting</option>
+                                        <option value="events services">Events Services</option>
+                                        <option value="nonprofit organization management">Nonprofit Organization Management</option>
+                                        <option value="entertainment">Entertainment</option>
+                                        <option value="electrical/electronic manufacturing">Electrical/Electronic Manufacturing</option>
+                                        <option value="leisure, travel & tourism">Leisure, Travel & Tourism</option>
+                                        <option value="professional training & coaching">Professional Training & Coaching</option>
+                                        <option value="transportation/trucking/railroad">Transportation/Trucking/Railroad</option>
+                                        <option value="law practice">Law Practice</option>
+                                        <option value="apparel & fashion">Apparel & Fashion</option>
+                                        <option value="architecture & planning">Architecture & Planning</option>
+                                        <option value="mechanical or industrial engineering">Mechanical or Industrial Engineering</option>
+                                        <option value="insurance">Insurance</option>
+                                        <option value="telecommunications">Telecommunications</option>
+                                        <option value="human resources">Human Resources</option>
+                                        <option value="staffing & recruiting">Staffing & Recruiting</option>
+                                        <option value="sports">Sports</option>
+                                        <option value="legal services">Legal Services</option>
+                                        <option value="oil & energy">Oil & Energy</option>
+                                        <option value="media production">Media Production</option>
+                                        <option value="machinery">Machinery</option>
+                                        <option value="wholesale">Wholesale</option>
+                                        <option value="consumer goods">Consumer Goods</option>
+                                        <option value="music">Music</option>
+                                        <option value="photography">Photography</option>
+                                        <option value="medical practice">Medical Practice</option>
+                                        <option value="cosmetics">Cosmetics</option>
+                                        <option value="environmental services">Environmental Services</option>
+                                        <option value="graphic design">Graphic Design</option>
+                                        <option value="business supplies & equipment">Business Supplies & Equipment</option>
+                                        <option value="renewables & environment">Renewables & Environment</option>
+                                        <option value="facilities services">Facilities Services</option>
+                                        <option value="publishing">Publishing</option>
+                                        <option value="food production">Food Production</option>
+                                        <option value="arts & crafts">Arts & Crafts</option>
+                                        <option value="building materials">Building Materials</option>
+                                        <option value="civil engineering">Civil Engineering</option>
+                                        <option value="religious institutions">Religious Institutions</option>
+                                        <option value="public relations & communications">Public Relations & Communications</option>
+                                        <option value="higher education">Higher Education</option>
+                                        <option value="printing">Printing</option>
+                                        <option value="furniture">Furniture</option>
+                                        <option value="mining & metals">Mining & Metals</option>
+                                        <option value="logistics & supply chain">Logistics & Supply Chain</option>
+                                        <option value="research">Research</option>
+                                        <option value="pharmaceuticals">Pharmaceuticals</option>
+                                        <option value="individual & family services">Individual & Family Services</option>
+                                        <option value="medical devices">Medical Devices</option>
+                                        <option value="civic & social organization">Civic & Social Organization</option>
+                                        <option value="e-learning">E-Learning</option>
+                                        <option value="security & investigations">Security & Investigations</option>
+                                        <option value="chemicals">Chemicals</option>
+                                        <option value="government administration">Government Administration</option>
+                                        <option value="online media">Online Media</option>
+                                        <option value="investment management">Investment Management</option>
+                                        <option value="farming">Farming</option>
+                                        <option value="writing & editing">Writing & Editing</option>
+                                        <option value="textiles">Textiles</option>
+                                        <option value="mental health care">Mental Health Care</option>
+                                        <option value="primary/secondary education">Primary/Secondary Education</option>
+                                        <option value="broadcast media">Broadcast Media</option>
+                                        <option value="biotechnology">Biotechnology</option>
+                                        <option value="information services">Information Services</option>
+                                        <option value="international trade & development">International Trade & Development</option>
+                                        <option value="motion pictures & film">Motion Pictures & Film</option>
+                                        <option value="consumer electronics">Consumer Electronics</option>
+                                        <option value="banking">Banking</option>
+                                        <option value="import & export">Import & Export</option>
+                                        <option value="industrial automation">Industrial Automation</option>
+                                        <option value="recreational facilities & services">Recreational Facilities & Services</option>
+                                        <option value="performing arts">Performing Arts</option>
+                                        <option value="utilities">Utilities</option>
+                                        <option value="sporting goods">Sporting Goods</option>
+                                        <option value="fine art">Fine Art</option>
+                                        <option value="airlines/aviation">Airlines/Aviation</option>
+                                        <option value="computer & network security">Computer & Network Security</option>
+                                        <option value="maritime">Maritime</option>
+                                        <option value="luxury goods & jewelry">Luxury Goods & Jewelry</option>
+                                        <option value="veterinary">Veterinary</option>
+                                        <option value="venture capital & private equity">Venture Capital & Private Equity</option>
+                                        <option value="wine & spirits">Wine & Spirits</option>
+                                        <option value="plastics">Plastics</option>
+                                        <option value="aviation & aerospace">Aviation & Aerospace</option>
+                                        <option value="commercial real estate">Commercial Real Estate</option>
+                                        <option value="computer games">Computer Games</option>
+                                        <option value="packaging & containers">Packaging & Containers</option>
+                                        <option value="executive office">Executive Office</option>
+                                        <option value="computer hardware">Computer Hardware</option>
+                                        <option value="computer networking">Computer Networking</option>
+                                        <option value="market research">Market Research</option>
+                                        <option value="outsourcing/offshoring">Outsourcing/Offshoring</option>
+                                        <option value="program development">Program Development</option>
+                                        <option value="translation & localization">Translation & Localization</option>
+                                        <option value="philanthropy">Philanthropy</option>
+                                        <option value="public safety">Public Safety</option>
+                                        <option value="alternative medicine">Alternative Medicine</option>
+                                        <option value="museums & institutions">Museums & Institutions</option>
+                                        <option value="warehousing">Warehousing</option>
+                                        <option value="defense & space">Defense & Space</option>
+                                        <option value="newspapers">Newspapers</option>
+                                        <option value="paper & forest products">Paper & Forest Products</option>
+                                        <option value="law enforcement">Law Enforcement</option>
+                                        <option value="investment banking">Investment Banking</option>
+                                        <option value="government relations">Government Relations</option>
+                                        <option value="fund-raising">Fund-Raising</option>
+                                        <option value="think tanks">Think Tanks</option>
+                                        <option value="glass, ceramics & concrete">Glass, Ceramics & Concrete</option>
+                                        <option value="capital markets">Capital Markets</option>
+                                        <option value="semiconductors">Semiconductors</option>
+                                        <option value="animation">Animation</option>
+                                        <option value="political organization">Political Organization</option>
+                                        <option value="package/freight delivery">Package/Freight Delivery</option>
+                                        <option value="wireless">Wireless</option>
+                                        <option value="international affairs">International Affairs</option>
+                                        <option value="public policy">Public Policy</option>
+                                        <option value="libraries">Libraries</option>
+                                        <option value="gambling & casinos">Gambling & Casinos</option>
+                                        <option value="railroad manufacture">Railroad Manufacture</option>
+                                        <option value="ranching">Ranching</option>
+                                        <option value="military">Military</option>
+                                        <option value="fishery">Fishery</option>
+                                        <option value="supermarkets">Supermarkets</option>
+                                        <option value="dairy">Dairy</option>
+                                        <option value="tobacco">Tobacco</option>
+                                        <option value="shipbuilding">Shipbuilding</option>
+                                        <option value="judiciary">Judiciary</option>
+                                        <option value="alternative dispute resolution">Alternative Dispute Resolution</option>
+                                        <option value="nanotechnology">Nanotechnology</option>
+                                        <option value="agriculture">Agriculture</option>
+                                        <option value="legislative office">Legislative Office</option>
+                                    </select>
+                                
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Company Keywords</label>
+                                    <input type="text" id="apify-keywords" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm focus:border-violet-500 focus:outline-none" placeholder="e.g. film production (comma sep)">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Company Size</label>
+                                    <input type="text" id="apify-size" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm focus:border-violet-500 focus:outline-none" placeholder="e.g. 1-10, 11-20 (comma sep)">
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-4 mb-5">
+                                <div>
+                                    <label class="text-xs text-gray-400 whitespace-nowrap block mb-1">Max Leads:</label>
+                                    <select id="apify-fetch-count" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                        <option value="50">50 leads</option>
+                                        <option value="100" selected>100 leads</option>
+                                        <option value="500">500 leads</option>
+                                        <option value="1000">1,000 leads</option>
+                                        <option value="2000">2,000 leads</option>
+                                        <option value="3000">3,000 leads</option>
+                                        <option value="4000">4,000 leads</option>
+                                        <option value="5000">5,000 leads</option>
+                                        <option value="6000">6,000 leads</option>
+                                        <option value="7000">7,000 leads</option>
+                                        <option value="8000">8,000 leads</option>
+                                        <option value="9000">9,000 leads</option>
+                                        <option value="10000">10,000 leads</option>
+                                        <option value="11000">11,000 leads</option>
+                                        <option value="12000">12,000 leads</option>
+                                        <option value="13000">13,000 leads</option>
+                                        <option value="14000">14,000 leads</option>
+                                        <option value="15000">15,000 leads</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-400 whitespace-nowrap block mb-1">Email Status:</label>
+                                    <select id="apify-email-status" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-violet-500 focus:outline-none">
+                                        <option value="validated" selected>Validated Only</option>
+                                        <option value="validated,unknown">Validated & Unknown</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="flex gap-3">
+                                <button onclick="runApifyPeopleSearch()" id="apifySearchBtn"
+                                    class="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 transition-all duration-200">
+                                    <i data-lucide="search" class="w-4 h-4"></i> Search Leads
+                                </button>
+                            </div>
+                            <div id="apifySearchStatus" class="mt-4 hidden"></div>
+                            
+                            <p class="text-xs text-gray-500 mt-4 text-center">
+                                Contacts will appear in the <strong class="text-gray-400">Contacts</strong> tab once the search completes in the background.
+                            </p>
+                        ` : `
+                            <h2 class="text-base font-semibold text-white mb-1">Search Google for Businesses</h2>
+                            <p class="text-xs text-gray-400 mb-5">Find business websites to enrich with Camoufox — emails &amp; Instagram scraped directly from their site.</p>
+                            
+                            <div class="grid grid-cols-2 gap-4 mb-5">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Niche</label>
+                                    <input type="text" id="bulk-search-niche" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-cyan-500 focus:outline-none" placeholder="e.g. production house">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Location (Cmd/Ctrl for multiple)</label>
+                                    <select multiple id="bulk-search-location-alt" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-white text-sm focus:border-cyan-500 focus:outline-none h-24">
+            <option value="united states">United States</option>
+            <option value="germany">Germany</option>
+            <option value="india">India</option>
+            <option value="united kingdom">United Kingdom</option>
+            <option value="russia">Russia</option>
+            <option value="france">France</option>
+            <option value="china">China</option>
+            <option value="canada">Canada</option>
+            <option value="netherlands">Netherlands</option>
+            <option value="mexico">Mexico</option>
+            <option value="belgium">Belgium</option>
+            <option value="japan">Japan</option>
+            <option value="brazil">Brazil</option>
+            <option value="australia">Australia</option>
+            <option value="poland">Poland</option>
+            <option value="thailand">Thailand</option>
+            <option value="sweden">Sweden</option>
+            <option value="portugal">Portugal</option>
+            <option value="spain">Spain</option>
+            <option value="czech republic">Czech Republic</option>
+            <option value="taiwan">Taiwan</option>
+            <option value="south africa">South Africa</option>
+            <option value="colombia">Colombia</option>
+            <option value="italy">Italy</option>
+            <option value="vietnam">Vietnam</option>
+            <option value="nigeria">Nigeria</option>
+            <option value="singapore">Singapore</option>
+            <option value="hong kong">Hong Kong</option>
+            <option value="ireland">Ireland</option>
+            <option value="israel">Israel</option>
+            <option value="switzerland">Switzerland</option>
+            <option value="turkey">Turkey</option>
+            <option value="romania">Romania</option>
+            <option value="south korea">South Korea</option>
+            <option value="indonesia">Indonesia</option>
+            <option value="united arab emirates">United Arab Emirates</option>
+            <option value="saudi arabia">Saudi Arabia</option>
+            <option value="austria">Austria</option>
+            <option value="philippines">Philippines</option>
+            <option value="peru">Peru</option>
+            <option value="malaysia">Malaysia</option>
+            <option value="argentina">Argentina</option>
+            <option value="ukraine">Ukraine</option>
+            <option value="ghana">Ghana</option>
+            <option value="denmark">Denmark</option>
+            <option value="norway">Norway</option>
+            <option value="finland">Finland</option>
+            <option value="puerto rico">Puerto Rico</option>
+            <option value="qatar">Qatar</option>
+            <option value="macau">Macau</option>
+            <option value="new zealand">New Zealand</option>
+            <option value="hungary">Hungary</option>
+            <option value="luxembourg">Luxembourg</option>
+            <option value="kuwait">Kuwait</option>
+            <option value="egypt">Egypt</option>
+            <option value="slovakia">Slovakia</option>
+            <option value="greece">Greece</option>
+            <option value="kenya">Kenya</option>
+            <option value="bulgaria">Bulgaria</option>
+            <option value="costa rica">Costa Rica</option>
+            <option value="chile">Chile</option>
+            <option value="venezuela">Venezuela</option>
+            <option value="afghanistan">Afghanistan</option>
+            <option value="bangladesh">Bangladesh</option>
+            <option value="malta">Malta</option>
+            <option value="guatemala">Guatemala</option>
+            <option value="pakistan">Pakistan</option>
+            <option value="lithuania">Lithuania</option>
+            <option value="panama">Panama</option>
+            <option value="morocco">Morocco</option>
+            <option value="republic of indonesia">Republic Of Indonesia</option>
+            <option value="uruguay">Uruguay</option>
+            <option value="serbia">Serbia</option>
+            <option value="bolivia">Bolivia</option>
+            <option value="angola">Angola</option>
+            <option value="dominican republic">Dominican Republic</option>
+            <option value="ecuador">Ecuador</option>
+            <option value="oman">Oman</option>
+            <option value="jamaica">Jamaica</option>
+            <option value="zambia">Zambia</option>
+            <option value="lebanon">Lebanon</option>
+            <option value="tanzania">Tanzania</option>
+            <option value="jordan">Jordan</option>
+            <option value="algeria">Algeria</option>
+            <option value="gibraltar">Gibraltar</option>
+            <option value="paraguay">Paraguay</option>
+            <option value="cambodia">Cambodia</option>
+            <option value="uganda">Uganda</option>
+            <option value="mozambique">Mozambique</option>
+            <option value="ethiopia">Ethiopia</option>
+            <option value="belarus">Belarus</option>
+            <option value="republic of the union of myanmar">Republic Of The Union Of Myanmar</option>
+            <option value="croatia">Croatia</option>
+            <option value="jersey">Jersey</option>
+            <option value="iraq">Iraq</option>
+            <option value="isle of man">Isle Of Man</option>
+            <option value="el salvador">El Salvador</option>
+            <option value="estonia">Estonia</option>
+            <option value="latvia">Latvia</option>
+            <option value="côte d'ivoire">Côte D'Ivoire</option>
+            <option value="tunisia">Tunisia</option>
+            <option value="sierra leone">Sierra Leone</option>
+            <option value="senegal">Senegal</option>
+            <option value="sri lanka">Sri Lanka</option>
+            <option value="cyprus">Cyprus</option>
+            <option value="kazakhstan">Kazakhstan</option>
+            <option value="guernsey">Guernsey</option>
+            <option value="bermuda">Bermuda</option>
+            <option value="mali">Mali</option>
+            <option value="honduras">Honduras</option>
+            <option value="bahrain">Bahrain</option>
+            <option value="slovenia">Slovenia</option>
+            <option value="papua new guinea">Papua New Guinea</option>
+            <option value="iceland">Iceland</option>
+            <option value="mauritius">Mauritius</option>
+            <option value="iran">Iran</option>
+            <option value="niger">Niger</option>
+            <option value="rwanda">Rwanda</option>
+            <option value="moldova">Moldova</option>
+            <option value="democratic republic of the congo">Democratic Republic Of The Congo</option>
+            <option value="liechtenstein">Liechtenstein</option>
+            <option value="fiji">Fiji</option>
+            <option value="kyrgyzstan">Kyrgyzstan</option>
+            <option value="azerbaijan">Azerbaijan</option>
+            <option value="madagascar">Madagascar</option>
+            <option value="trinidad and tobago">Trinidad And Tobago</option>
+            <option value="lesotho">Lesotho</option>
+            <option value="nicaragua">Nicaragua</option>
+            <option value="cameroon">Cameroon</option>
+            <option value="barbados">Barbados</option>
+            <option value="armenia">Armenia</option>
+            <option value="haiti">Haiti</option>
+            <option value="maldives">Maldives</option>
+            <option value="guam">Guam</option>
+            <option value="laos">Laos</option>
+            <option value="nepal">Nepal</option>
+            <option value="brunei">Brunei</option>
+            <option value="reunion">Reunion</option>
+            <option value="macedonia (fyrom)">Macedonia (Fyrom)</option>
+            <option value="swaziland">Swaziland</option>
+            <option value="liberia">Liberia</option>
+            <option value="uzbekistan">Uzbekistan</option>
+            <option value="sudan">Sudan</option>
+            <option value="anguilla">Anguilla</option>
+            <option value="cuba">Cuba</option>
+            <option value="cayman islands">Cayman Islands</option>
+            <option value="seychelles">Seychelles</option>
+            <option value="saint kitts and nevis">Saint Kitts And Nevis</option>
+            <option value="suriname">Suriname</option>
+            <option value="bosnia and herzegovina">Bosnia And Herzegovina</option>
+            <option value="malawi">Malawi</option>
+            <option value="the bahamas">The Bahamas</option>
+            <option value="botswana">Botswana</option>
+            <option value="syria">Syria</option>
+            <option value="burundi">Burundi</option>
+            <option value="guadeloupe">Guadeloupe</option>
+            <option value="namibia">Namibia</option>
+            <option value="burkina faso">Burkina Faso</option>
+            <option value="somalia">Somalia</option>
+            <option value="greenland">Greenland</option>
+            <option value="equatorial guinea">Equatorial Guinea</option>
+            <option value="chad">Chad</option>
+            <option value="monaco">Monaco</option>
+            <option value="republic of the congo">Republic Of The Congo</option>
+            <option value="u.s. virgin islands">U.S. Virgin Islands</option>
+            <option value="mayotte">Mayotte</option>
+            <option value="french polynesia">French Polynesia</option>
+            <option value="french guiana">French Guiana</option>
+            <option value="andorra">Andorra</option>
+            <option value="new caledonia">New Caledonia</option>
+            <option value="central african republic">Central African Republic</option>
+            <option value="myanmar (burma)">Myanmar (Burma)</option>
+            <option value="belize">Belize</option>
+            <option value="aland islands">Aland Islands</option>
+            <option value="solomon islands">Solomon Islands</option>
+            <option value="kosovo">Kosovo</option>
+            <option value="gabon">Gabon</option>
+            <option value="benin">Benin</option>
+            <option value="bonaire, sint eustatius and saba">Bonaire, Sint Eustatius And Saba</option>
+            <option value="martinique">Martinique</option>
+            <option value="tonga">Tonga</option>
+            <option value="south sudan">South Sudan</option>
+            <option value="cook islands">Cook Islands</option>
+            <option value="georgia">Georgia</option>
+            <option value="mauritania">Mauritania</option>
+            <option value="turkmenistan">Turkmenistan</option>
+            <option value="libya">Libya</option>
+            <option value="falkland islands (islas malvinas)">Falkland Islands (Islas Malvinas)</option>
+            <option value="bhutan">Bhutan</option>
+            <option value="tajikistan">Tajikistan</option>
+            <option value="northern mariana islands">Northern Mariana Islands</option>
+            <option value="western sahara">Western Sahara</option>
+            <option value="guyana">Guyana</option>
+            <option value="dominica">Dominica</option>
+            <option value="vanuatu">Vanuatu</option>
+            <option value="kiribati">Kiribati</option>
+            <option value="togo">Togo</option>
+            <option value="nauru">Nauru</option>
+            <option value="samoa">Samoa</option>
+            <option value="mongolia">Mongolia</option>
+            <option value="myanmar">Myanmar</option>
+            <option value="yemen">Yemen</option>
+            <option value="albania">Albania</option>
+            <option value="montenegro">Montenegro</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div id="queryList" class="space-y-2 mb-4 hidden">
+                                <label class="block text-[10px] font-bold text-gray-500 mb-1.5 uppercase tracking-wider">Search Queries</label>
+                                <div class="flex gap-2">
+                                    <input type="text" id="single-search-query"
+                                        class="search-query-input flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-cyan-500 focus:outline-none"
+                                        placeholder="e.g. SEO agency Chicago">
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-4 mb-5">
+                                <label class="text-xs text-gray-400 whitespace-nowrap">Results per query:</label>
+                                <select id="numResults" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-cyan-500 focus:outline-none">
+                                    <option value="10">10 results (Quick)</option>
+                                    <option value="50" selected>50 results</option>
+                                    <option value="100">100 results (Standard)</option>
+                                    <option value="200">200 results</option>
+                                    <option value="500">500 results (Deep)</option>
+                                    <option value="1000">1,000 results (Bulk)</option>
+                                </select>
+                            </div>
+
+                            <div class="flex gap-3">
+                                <button onclick="addQueryRow()" id="addQueryBtn" class="flex items-center gap-1.5 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-white transition-colors">
+                                    <i data-lucide="plus" class="w-4 h-4"></i> Add Query
+                                </button>
+                                <button onclick="runBulkSearch()" id="bulkSearchBtn"
+                                    class="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 transition-all duration-200">
+                                    <i data-lucide="rocket" class="w-4 h-4"></i> Bulk Search (20+ Queries)
+                                </button>
+                            </div>
+                            <div id="searchStatus" class="mt-4 hidden"></div>
+                            
+                            <p class="text-xs text-gray-500 mt-4 text-center">
+                                Contacts appear in the <strong class="text-gray-400">Contacts</strong> tab once the search completes.
+                                Then run <strong class="text-cyan-400">🕵️ Stealthy Enrich</strong> to scrape their emails.
+                            </p>
+                        `}
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        async function runSearch() {
+            const mode = document.getElementById('searchMode')?.value || 'web';
+            const isPeople = (window._searchMode || 'people') === 'people';
+
+            if (isPeople) return runPeopleSearch();
+            if (mode === 'maps') return runMapsSearch();
+            return runBusinessSearch();
+        }
+
+        async function runMapsSearch() {
+            const queries = _getSearchQueries();
+            const location = document.getElementById('searchLocation')?.value || '';
+            const limit = parseInt(document.getElementById('numResults').value, 10);
+            const btn = document.getElementById('searchBtn');
+            const status = document.getElementById('searchStatus');
+
+            if (!queries.length) return alert('Enter at least one query');
+            if (!location) return alert('Enter a target location (e.g. Mumbai)');
+
+            btn.disabled = true;
+            status.classList.remove('hidden');
+            status.innerHTML = `<div class="bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs rounded-lg p-3 flex items-center gap-3">
+                <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                Searching Google Maps via Apify... This takes 1-2 minutes.
+            </div>`;
+            lucide.createIcons();
+
+            try {
+                const res = await apiFetch('/api/contacts/apify-search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: queries[0],
+                        location,
+                        num_results: limit,
+                        project_id: currentProjectId
+                    })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                status.innerHTML = `<div class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-lg p-3">
+                    ✅ Success! Found ${data.total_results} results. Added ${data.inserted} new businesses.
+                </div>`;
+            } catch (e) {
+                status.innerHTML = `<div class="bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-lg p-3">❌ Error: ${e.message}</div>`;
+            }
+            btn.disabled = false;
+            lucide.createIcons();
+        }
+
+        async function runBulkSearch() {
+            const niche = document.getElementById('bulk-search-niche')?.value || '';
+            const locEl2 = document.getElementById('bulk-search-location-alt') || document.getElementById('bulk-search-location');
+            const location = locEl2 ? Array.from(locEl2.selectedOptions || []).map(o => o.value).join(', ') : '';
+            const resultsPerQuery = document.getElementById('numResults')?.value || '100';
+            const btn = document.getElementById('bulkSearchBtn');
+            const status = document.getElementById('searchStatus');
+
+            if (!niche) return alert('Enter the business niche in the first query box (e.g. production house)');
+            if (!location) return alert('Enter a target location (e.g. Mumbai)');
+
+            if (!confirm(`This will generate 20+ query variants for "${niche}" in "${location}" and fetch up to 2,000 results. This takes 5-10 minutes. Continue?`)) return;
+
+            btn.disabled = true;
+            status.classList.remove('hidden');
+            status.innerHTML = `<div class="bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs rounded-lg p-3 flex items-center gap-3">
+                <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                Bulk search started! Generating queries and results... You can check the Contacts tab for progress.
+            </div>`;
+            lucide.createIcons();
+
+            try {
+                const res = await apiFetch('/api/contacts/bulk-search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        niche,
+                        location,
+                        project_id: currentProjectId,
+                        pages: 10
+                    })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                status.innerHTML = `<div class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-lg p-3">
+                    🚀 ${data.message}
+                </div>`;
+            } catch (e) {
+                status.innerHTML = `<div class="bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-lg p-3">❌ Error: ${e.message}</div>`;
+            }
+            btn.disabled = false;
+            lucide.createIcons();
+        }
+
+        function _getSearchQueries() {
+            return [...document.querySelectorAll('.search-query-input')]
+                .map(i => i.value.trim()).filter(Boolean);
+        }
+
+        async function runApifyPeopleSearch() {
+            const getVal = (id) => {
+                const el = document.getElementById(id);
+                if (!el) return '';
+                if (el.tagName === 'SELECT' && el.multiple) {
+                    return Array.from(el.selectedOptions).map(o => o.value).join(', ');
+                }
+                return el.value?.trim() || '';
+            };
+            const payload = {
+                project_id: currentProjectId,
+                contact_job_title: getVal('apify-job-titles'),
+                contact_location: getVal('apify-location'),
+                contact_city: getVal('apify-city'),
+                company_industry: getVal('apify-industry'),
+                company_keywords: getVal('apify-keywords'),
+                size: getVal('apify-size'),
+                fetch_count: parseInt(getVal('apify-fetch-count') || '100', 10),
+                email_status: getVal('apify-email-status') || 'validated'
+            };
+
+            if (!payload.contact_job_title) {
+                return alert('Please enter at least one job title to search.');
+            }
+            if (!payload.contact_location && !payload.contact_city) {
+                return alert('Please enter either a Location or a City.');
+            }
+
+            const btn = document.getElementById('apifySearchBtn');
+            const status = document.getElementById('apifySearchStatus');
+            btn.disabled = true;
+            status.classList.remove('hidden');
+            status.innerHTML = `<div class="bg-violet-500/10 border border-violet-500/20 text-violet-400 text-xs rounded-lg p-3 flex items-center gap-3">
+                <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                Starting Apify Leads-Finder background task... Check contacts tab in a few minutes.
+            </div>`;
+            lucide.createIcons();
+
+            try {
+                const res = await apiFetch('/api/contacts/apify-people-search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                status.innerHTML = `<div class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs rounded-lg p-3">
+                    ✅ Success! ${data.message}
+                </div>`;
+            } catch (e) {
+                status.innerHTML = `<div class="bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-lg p-3">❌ Error: ${e.message}</div>`;
+                btn.disabled = false;
+            }
+        }
+
+        async function runBusinessSearch() {
+            const queries = _getSearchQueries();
+            if (!queries.length) { showToast('Add at least one search query'); return; }
+            const num = parseInt(document.getElementById('numResults')?.value || '50');
+            if (!confirm(`Search for businesses matching ${queries.length} quer${queries.length === 1 ? 'y' : 'ies'}? Results will appear in Contacts with websites ready for Camoufox enrichment.`)) return;
+            showToast('🏢 Business search started in background...');
+            try {
+                const res = await apiFetch('/api/contacts/business-search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ queries, num_results: num, project_id: currentProjectId })
+                });
+                const data = await res.json();
+                if (data.error) { showToast('❌ ' + data.error); return; }
+                showToast(`🏢 ${data.message || 'Business search started — contacts appear in a minute'}`);
+            } catch (e) { showToast('❌ ' + e.message); }
+        }
+
+        function addQueryRow() {
+            const list = document.getElementById('queryList');
+            const div = document.createElement('div');
+            div.className = 'flex gap-2';
+            const isPeopleMode = (window._searchMode || 'people') === 'people';
+            div.innerHTML = `
+                <input type="text" class="search-query-input flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:border-violet-500 focus:outline-none" placeholder="${isPeopleMode ? 'e.g. film critic site:linkedin.com' : 'e.g. digital agency Atlanta'}">
+                <button onclick="this.closest('.flex').remove()" class="text-gray-400 hover:text-red-400 px-2"><i data-lucide="x" class="w-4 h-4"></i></button>
+            `;
+            list.appendChild(div);
+            lucide.createIcons();
+        }
+
+        // =========================================================================
+        // TOAST
+        // =========================================================================
+        function showToast(msg, isHtml = false) {
+            const existing = document.getElementById('toast');
+            if (existing) existing.remove();
+
+            const toast = document.createElement('div');
+            toast.id = 'toast';
+            toast.className = 'fixed bottom-6 right-6 bg-gray-800 border border-gray-700 text-white px-5 py-3 rounded-xl shadow-xl text-sm z-50 animate-fade-in flex items-center gap-3';
+            if (isHtml) {
+                toast.innerHTML = msg;
+            } else {
+                toast.textContent = msg;
+            }
+            document.body.appendChild(toast);
+            lucide.createIcons();
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'transition-opacity', 'duration-500');
+                setTimeout(() => toast.remove(), 500);
+            }, 7000);
+        }
+
+
+        // =========================================================================
+        // INLINE EDITING
+        // =========================================================================
+        function editContactName(element, id) {
+            const displaySpan = document.getElementById(`name-display-${id}`);
+            const editContainer = document.getElementById(`name-edit-container-${id}`);
+            const inputField = document.getElementById(`name-input-${id}`);
+
+            displaySpan.parentElement.classList.add('hidden');
+            editContainer.classList.remove('hidden');
+            inputField.focus();
+
+            // Put cursor at the end
+            const val = inputField.value;
+            inputField.value = '';
+            inputField.value = val;
+        }
+
+        function cancelContactName(id) {
+            const displaySpan = document.getElementById(`name-display-${id}`);
+            const editContainer = document.getElementById(`name-edit-container-${id}`);
+
+            editContainer.classList.add('hidden');
+            displaySpan.parentElement.classList.remove('hidden');
+        }
+
+        async function saveContactName(id) {
+            const displaySpan = document.getElementById(`name-display-${id}`);
+            const editContainer = document.getElementById(`name-edit-container-${id}`);
+            const inputField = document.getElementById(`name-input-${id}`);
+
+            const newName = inputField.value.trim();
+            const oldName = displaySpan.innerText;
+
+            // Switch back to view mode immediately for responsiveness
+            displaySpan.innerText = newName || '—';
+            editContainer.classList.add('hidden');
+            displaySpan.parentElement.classList.remove('hidden');
+
+            if (newName === oldName || (!newName && oldName === '—')) return;
+
+            try {
+                const res = await fetch(`/api/contacts/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: newName })
+                });
+
+                if (!res.ok) throw new Error('Failed to update name');
+                showToast('Name updated successfully');
+
+            } catch (error) {
+                console.error('Error saving name:', error);
+                displaySpan.innerText = oldName; // Revert on failure
+                showToast('Failed to save name');
+            }
+        }
+
+        // =========================================================================
+        // BOOT
+        // =========================================================================
+        init();
+
+        resumeSeqProgressIfActive();
+    

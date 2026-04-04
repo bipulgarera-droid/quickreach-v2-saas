@@ -60,6 +60,12 @@ SENDER_NAME = os.getenv('SENDER_NAME', 'Bipul')
 if SUPABASE_URL and effective_key:
     supabase = create_client(SUPABASE_URL, effective_key)
     logger.info("Supabase client initialized")
+    # Check if niche column exists on projects
+    try:
+        supabase.table('projects').select('niche').limit(1).execute()
+        logger.info("Projects.niche column exists")
+    except Exception:
+        logger.warning("Projects table missing 'niche' column — run: ALTER TABLE projects ADD COLUMN niche TEXT;")
 else:
     logger.warning("Supabase credentials not found")
 
@@ -156,6 +162,8 @@ def update_project(project_id):
             updates['name'] = name
         if 'sender_group' in data:
             updates['sender_group'] = data.get('sender_group', 'all').strip()
+        if 'niche' in data:
+            updates['niche'] = (data.get('niche') or '').strip() or None
 
         if not updates:
             return jsonify({'success': True})
@@ -196,12 +204,16 @@ def create_project():
             return jsonify({'error': 'Project name required'}), 400
         
         # 1. Create the project
-        result = supabase.table('projects').insert({
+        niche = data.get('niche', '').strip()
+        insert_data = {
             'name': name, 
             'description': description,
             'custom_instructions': custom_instructions,
             'sender_group': 'all'
-        }).execute()
+        }
+        if niche:
+            insert_data['niche'] = niche
+        result = supabase.table('projects').insert(insert_data).execute()
         
         project = result.data[0]
         project_id = project['id']
