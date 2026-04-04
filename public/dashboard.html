@@ -1744,7 +1744,7 @@
 
             try {
                 const payload = {
-                    project_id: projectId,
+                    project_id: currentProjectId,
                     name: document.getElementById('mc-name').value.trim() || company,
                     company,
                     email: document.getElementById('mc-email').value.trim(),
@@ -1757,7 +1757,7 @@
                     bio: document.getElementById('mc-bio').value.trim(),
                 };
 
-                const res = await apiFetch('/api/contacts/add?project_id=' + projectId, {
+                const res = await apiFetch('/api/contacts/add?project_id=' + currentProjectId, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -1795,7 +1795,7 @@
                 const res = await apiFetch('/api/leads/import', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ project_id: projectId, leads })
+                    body: JSON.stringify({ project_id: currentProjectId, leads })
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
@@ -1864,7 +1864,7 @@
                 const res = await apiFetch('/api/leads/import', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ project_id: projectId, leads })
+                    body: JSON.stringify({ project_id: currentProjectId, leads })
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
