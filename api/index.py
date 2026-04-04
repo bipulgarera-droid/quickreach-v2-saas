@@ -1486,7 +1486,7 @@ COMPANY SCRAPED CONTEXT:
 EMAIL_1 RULES:
 Use the company context to craft a personalized opening, but seamlessly integrate it with the original offer. Follow this flow:
 1. The Observation: Start by casually mentioning a specific, relevant detail from their business context (e.g., their unique process or target audience) so they know this isn't an automated blast. Do NOT reuse the original opening line.
-2. The Bridge: Write a smooth transition connecting your observation to the problem your original offer solves. Make it sound completely natural and conversational.
+2. The Bridge: Write a smooth transition connecting your observation to the problem your original offer solves. Make it sound completely natural and conversational. DO NOT use em-dashes (— or -) to connect thoughts. Use simple commas or short sentences.
 3. The Offer & Proof: Naturally weave in the original core offer and proof statements. You may slightly rephrase them to fit the conversational flow, but do NOT change the core value proposition, numbers, or factual claims.
 4. The CTA: Keep the final Call to Action essentially identical to the original.
 5. Keep the total output for EMAIL_1 strictly under 75-100 words. No fluff. No corporate speak.
