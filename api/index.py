@@ -1484,11 +1484,12 @@ COMPANY SCRAPED CONTEXT:
 - Proof: {company_context.get('proof_of_success','')}
 
 EMAIL_1 RULES:
-Rule 1: Line 1 MUST be a completely NEW, highly tailored, casual observation about their company based on the scraped context, immediately establishing "Why Now" and forming a logical bridge to the rest of the email. Do NOT reuse the original opening line.
-Rule 2: Line 2 MUST state the core offer exactly as provided in the original EMAIL_1 body.
-Rule 3: Line 3 MUST state the proof exactly as provided in the original EMAIL_1 body.
-Rule 4: Line 4 MUST be the exact CTA provided in the original EMAIL_1 body.
-Rule 5: Keep the total output for EMAIL_1 strictly under 75-100 words. No fluff. No filler.
+Use the company context to craft a personalized opening, but seamlessly integrate it with the original offer. Follow this flow:
+1. The Observation: Start by casually mentioning a specific, relevant detail from their business context (e.g., their unique process or target audience) so they know this isn't an automated blast. Do NOT reuse the original opening line.
+2. The Bridge: Write a smooth transition connecting your observation to the problem your original offer solves. Make it sound completely natural and conversational.
+3. The Offer & Proof: Naturally weave in the original core offer and proof statements. You may slightly rephrase them to fit the conversational flow, but do NOT change the core value proposition, numbers, or factual claims.
+4. The CTA: Keep the final Call to Action essentially identical to the original.
+5. Keep the total output for EMAIL_1 strictly under 75-100 words. No fluff. No corporate speak.
 
 For EMAIL_2 onwards, just do the standard paraphrasing as normal."""
 
