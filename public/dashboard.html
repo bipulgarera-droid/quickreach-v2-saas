@@ -4205,7 +4205,7 @@
                         
                         ${seq.status === 'pending' ? `
                         <div class="flex justify-end mt-2">
-                            <button id="btn-save-seq-${seq.id}" onclick="saveSequenceStep('${seq.id}', this)" class="bg-violet-600/20 hover:bg-violet-600/40 border border-violet-500/50 text-violet-300 text-xs font-bold uppercase tracking-widest py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2">
+                            <button id="btn-save-seq-${seq.id}" onclick="saveContactSequenceStep('${seq.id}', this)" class="bg-violet-600/20 hover:bg-violet-600/40 border border-violet-500/50 text-violet-300 text-xs font-bold uppercase tracking-widest py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2">
                                 <i data-lucide="save" class="w-4 h-4"></i> Save Step ${seq.step_number}
                             </button>
                         </div>
@@ -4228,7 +4228,7 @@
             }
         }
         
-        async function saveSequenceStep(id, btn) {
+        async function saveContactSequenceStep(id, btn) {
             const subject = document.getElementById('seq-subject-' + id).value;
             const body = document.getElementById('seq-body-' + id).value;
             
