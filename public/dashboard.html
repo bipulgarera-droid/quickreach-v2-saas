@@ -1610,6 +1610,9 @@
                                         <span class="status-${c.status} text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-current opacity-80">${c.status || 'new'}</span>
                                     </td>
                                     <td class="px-4 py-3 text-right">
+                                        <button onclick="showContactSequences('${c.id}')" class="text-gray-400 hover:text-violet-400 mr-2" title="Edit Sequences">
+                                            <i data-lucide="mail" class="w-4 h-4 inline"></i>
+                                        </button>
                                         <button onclick="showEditContactModal('${c.id}')" class="text-gray-400 hover:text-blue-400 mr-2" title="Edit Contact">
                                             <i data-lucide="edit-3" class="w-4 h-4 inline"></i>
                                         </button>
@@ -4158,6 +4161,100 @@
         function field(label, value) {
             return `<div><label class="text-xs text-gray-400 block mb-0.5">${label}</label><p class="text-sm text-gray-200">${value || '—'}</p></div>`;
         }
+
+        async function showContactSequences(id) {
+            if (!currentProjectId) {
+                return showToast('❌ No project selected');
+            }
+            showToast('Loading sequence editor...');
+            try {
+                const res = await apiFetch(`/api/sequences?project_id=${currentProjectId}&contact_id=${id}`);
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                const sequences = data.sequences;
+                if (!sequences || sequences.length === 0) {
+                    return showToast('ℹ️ No sequences found for this contact. Click the "Sequence" button above first to generate them.');
+                }
+                
+                let html = `<div class="p-6 max-w-4xl mx-auto max-h-[85vh] overflow-y-auto">
+                    <h2 class="text-xl font-black text-white mb-6 tracking-tight flex items-center gap-2">
+                        <i data-lucide="mail" class="text-violet-500 w-6 h-6"></i>
+                        Sequence Editor
+                    </h2>
+                    <div class="space-y-6">`;
+                    
+                for(const seq of sequences) {
+                    const statusClass = seq.status === 'pending' ? 'text-amber-400' : (seq.status === 'sent' ? 'text-emerald-400' : 'text-gray-400');
+                    html += `
+                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 shadow-sm">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-sm font-bold text-gray-300">Step ${seq.step_number}</h3>
+                            <span class="text-xs uppercase font-bold tracking-wider ${statusClass}">${seq.status}</span>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="text-[10px] text-gray-500 uppercase font-bold tracking-widest block mb-1">Subject</label>
+                            <input id="seq-subject-${seq.id}" class="w-full bg-gray-950 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 flex-grow focus:border-violet-500 outline-none transition-colors" value="${(seq.subject || '').replace(/"/g, '&quot;')}" ${seq.status !== 'pending' ? 'disabled' : ''}>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="text-[10px] text-gray-500 uppercase font-bold tracking-widest block mb-1">Body HTML</label>
+                            <textarea id="seq-body-${seq.id}" rows="8" class="w-full bg-gray-950 border border-gray-700 text-white text-sm rounded-lg px-3 py-2 focus:border-violet-500 outline-none transition-colors font-mono resize-y" ${seq.status !== 'pending' ? 'disabled' : ''}>${(seq.body || '').replace(/</g, '&lt;')}</textarea>
+                        </div>
+                        
+                        ${seq.status === 'pending' ? `
+                        <div class="flex justify-end mt-2">
+                            <button id="btn-save-seq-${seq.id}" onclick="saveSequenceStep('${seq.id}', this)" class="bg-violet-600/20 hover:bg-violet-600/40 border border-violet-500/50 text-violet-300 text-xs font-bold uppercase tracking-widest py-2 px-4 rounded-lg transition-all flex items-center justify-center gap-2">
+                                <i data-lucide="save" class="w-4 h-4"></i> Save Step ${seq.step_number}
+                            </button>
+                        </div>
+                        ` : ''}
+                    </div>
+                    `;
+                }
+                
+                html += `
+                    </div>
+                    <div class="mt-8 flex justify-end">
+                        <button onclick="closeModal()" class="px-6 py-2.5 bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold uppercase tracking-widest rounded-xl transition-all">Close</button>
+                    </div>
+                </div>`;
+                
+                openModal(html);
+                
+            } catch (e) {
+                showToast('❌ Failed to load sequences: ' + e.message);
+            }
+        }
+        
+        async function saveSequenceStep(id, btn) {
+            const subject = document.getElementById('seq-subject-' + id).value;
+            const body = document.getElementById('seq-body-' + id).value;
+            
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Saving...';
+            btn.disabled = true;
+            
+            try {
+                const res = await apiFetch('/api/sequences/' + id, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ subject, body })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                
+                showToast('✅ Step updated successfully');
+            } catch (e) {
+                showToast('❌ Failed to update step: ' + e.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                lucide.createIcons();
+            }
+        }
+
 
         // =========================================================================
         // MODALS
