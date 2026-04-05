@@ -168,92 +168,85 @@ def find_website_serper(company: str, niche: str = '') -> Optional[str]:
 # STEP 2: Find Emails by Domain
 # =============================================================================
 
-def _scrape_emails_from_page(url: str, domain: str) -> list[str]:
-    """Scrape a URL via Jina Reader and extract emails belonging to domain."""
+def _jina_scrape(url: str) -> str:
+    """Fetch a URL via Jina Reader, return raw text."""
     try:
         headers = {'Accept': 'text/plain'}
         if JINA_API_KEY:
             headers['Authorization'] = f'Bearer {JINA_API_KEY}'
-        jina_url = JINA_URL + url
         logger.info(f"  🔎 Jina scrape: {url}")
-        resp = requests.get(jina_url, headers=headers, timeout=20)
-        text = resp.text
-        emails = re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', text)
-        found = []
-        seen = set()
-        for email in emails:
-            email = email.strip().rstrip('.,;:)!% ]').strip()
-            el = email.lower()
-            if el not in seen and _is_valid_email(el) and domain.lower() in el:
-                found.append(email)
-                seen.add(el)
-        return found
+        resp = requests.get(JINA_URL + url, headers=headers, timeout=20)
+        return resp.text
     except Exception as e:
         logger.warning(f"Jina scrape error for {url}: {e}")
-        return []
+        return ''
+
+
+def _extract_emails_for_domain(text: str, domain: str) -> list[str]:
+    """Pull all valid @domain emails out of a block of text."""
+    found = []
+    seen = set()
+    for email in re.findall(r'[\w.+-]+@[\w.-]+', text):
+        email = email.strip().rstrip('.,;:)!% ]"\'')
+        el = email.lower()
+        if el not in seen and domain.lower() in el and _is_valid_email(el):
+            found.append(email)
+            seen.add(el)
+    return found
+
+
+def _find_contact_link(text: str, base_url: str) -> str:
+    """
+    Scan Jina-rendered text for a contact/connect/about page URL.
+    Jina renders markdown links as [text](url).
+    """
+    # Look for markdown links whose text or href hints at contact
+    contact_keywords = re.compile(r'contact|connect|reach|enquir|touch|about', re.I)
+    for m in re.finditer(r'\[([^\]]*)\]\((https?://[^\)]+)\)', text):
+        label, href = m.group(1), m.group(2)
+        if contact_keywords.search(label) or contact_keywords.search(href):
+            return href
+    # Fallback: bare URLs containing contact keywords
+    for m in re.finditer(r'https?://[\w./\-?=&%#]+', text):
+        href = m.group(0)
+        if contact_keywords.search(href):
+            return href
+    return ''
 
 
 def find_emails_by_domain(domain: str, website: str = '') -> list[str]:
     """
-    Find emails for a domain.
-    1. Serper query: "@{domain}" AND ("email" OR "contact")
-    2. Fallback: Jina scrape of /contact and /about pages
+    Jina-only email discovery:
+    1. Scrape homepage → extract emails + discover real contact page URL
+    2. Scrape contact page → extract more emails
     """
-    if not domain:
+    if not website:
         return []
-    
-    found_emails = []
-    seen_emails = set()
 
-    # ── Step 1: Serper search ──
-    if SERPER_API_KEY:
-        query = f'"@{domain}" AND ("email" OR "contact")'
-        headers = {'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json'}
-        try:
-            payload = {'q': query, 'num': 10}
-            logger.info(f"  📧 Email search: {query}")
-            response = requests.post(SERPER_URL, headers=headers, json=payload, timeout=15)
-            data = response.json()
+    found_emails: list[str] = []
+    seen_emails: set[str] = set()
 
-            for text_block in [
-                data.get('answerBox', {}).get('snippet', '') or '',
-                data.get('answerBox', {}).get('answer', '') or '',
-                data.get('knowledgeGraph', {}).get('description', '') or '',
-            ]:
-                for email in re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', text_block):
-                    email = email.strip().rstrip('.,;:)!% ]').strip()
-                    el = email.lower()
-                    if el not in seen_emails and _is_valid_email(el):
-                        found_emails.append(email)
-                        seen_emails.add(el)
+    def _collect(emails: list[str]) -> None:
+        for e in emails:
+            if e.lower() not in seen_emails:
+                found_emails.append(e)
+                seen_emails.add(e.lower())
 
-            for result in data.get('organic', []):
-                text = f"{result.get('title', '')} {result.get('snippet', '')}"
-                for email in re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', text):
-                    email = email.strip().rstrip('.,;:)!% ]').strip()
-                    el = email.lower()
-                    if el not in seen_emails and _is_valid_email(el):
-                        found_emails.append(email)
-                        seen_emails.add(el)
+    # ── Step 1: Homepage ──
+    homepage_text = _jina_scrape(website)
+    _collect(_extract_emails_for_domain(homepage_text, domain))
 
-            if found_emails:
-                logger.info(f"    -> Found {len(found_emails)} emails via Serper for @{domain}")
-        except Exception as e:
-            logger.warning(f"Serper email search error for '{domain}': {e}")
+    contact_url = _find_contact_link(homepage_text, website)
 
-    # ── Step 2: Jina fallback — scrape contact/about pages ──
-    if not found_emails and website:
-        base = website.rstrip('/')
-        for path in ['/contact', '/contact-us', '/about', '/connect']:
-            page_emails = _scrape_emails_from_page(base + path, domain)
-            for email in page_emails:
-                el = email.lower()
-                if el not in seen_emails:
-                    found_emails.append(email)
-                    seen_emails.add(el)
-            if found_emails:
-                logger.info(f"    -> Found {len(found_emails)} emails via Jina for @{domain}")
-                break
+    # ── Step 2: Contact page ──
+    if contact_url and contact_url != website:
+        contact_text = _jina_scrape(contact_url)
+        _collect(_extract_emails_for_domain(contact_text, domain))
+
+    if found_emails:
+        logger.info(f"    -> Found {len(found_emails)} email(s) for @{domain} via Jina")
+    else:
+        logger.warning(f"  ❌ No emails found for domain: {domain}")
 
     return found_emails
 
