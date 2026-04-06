@@ -1049,6 +1049,7 @@ def trigger_manual_verification():
                 # Filter out contacts with no email, or already verified
                 # Original behavior: preserve existing verification results unless force=True
                 to_verify = []
+                risky_contacts = []
                 already_verified = 0
                 for c in all_contacts_data:
                     enrichment_data = c.get('enrichment_data') or {}
@@ -1064,7 +1065,11 @@ def trigger_manual_verification():
                         job_in_mem['done'] += 1
                         job_in_mem['skipped'] += 1
                     elif v_status and not force:
-                        # Already has a verification result — keep it, don't re-probe
+                        # Already has a verification result
+                        if v_status == 'risky' and enrichment_data.get('serper_verified') is None:
+                            # It's risky but never had OSINT run — push straight to OSINT
+                            risky_contacts.append(c)
+                        
                         already_verified += 1
                         job_in_mem['done'] += 1
                     else:

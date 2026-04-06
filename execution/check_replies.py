@@ -294,6 +294,11 @@ def check_all_replies(days=7, logger_callback=None, skip_db_update=False):
                         stats['spam_ignored'] += 1
                         
                 except Exception as msg_err:
+                    err_str = str(msg_err).lower()
+                    if "eof" in err_str or "socket error" in err_str or "connection" in err_str:
+                        log(f"  ❌ Connection dropped (SSL/EOF). Aborting this account and moving to next.")
+                        break
+                    
                     log(f"  ❌ Error processing message: {msg_err}")
                     continue
                         

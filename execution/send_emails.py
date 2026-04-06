@@ -128,7 +128,7 @@ def send_pending_emails(limit: int = 600, dry_run: bool = False, project_id: str
                 stats['skipped'] += 1
                 continue
             elif v_status == 'risky':
-                # Option 2 Strict Mode: Only proceed if OSINT fallback verified them.
+                # Strict Mode: Only proceed if OSINT fallback verified them.
                 if ed.get('serper_verified') is True:
                     _log(f"OSINT BOUNCE PROTECTION: Proceeding with {to_email} (Risky, but Google Verified!).")
                 else:
