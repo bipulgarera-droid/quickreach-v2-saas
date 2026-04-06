@@ -129,7 +129,32 @@ def send_pending_emails(limit: int = 600, dry_run: bool = False, project_id: str
                 continue
             elif v_status == 'risky':
                 # Strict Mode: Only proceed if OSINT fallback verified them.
-                if ed.get('serper_verified') is True:
+                serper_passed = ed.get('serper_verified')
+                
+                # If OSINT never ran for this contact, do it inline right now
+                if serper_passed is None:
+                    _log(f"OSINT BOUNCE PROTECTION: {to_email} is RISKY but missing OSINT check. Running real-time verification now...")
+                    try:
+                        from execution.serper_fallback import verify_risky_contacts_bulk
+                        # Reconstruct the expected object structure for the bulk verifier
+                        c_obj = {
+                            'id': seq['contact_id'], 
+                            'email': to_email, 
+                            'company': contact.get('company', ''), 
+                            'enrichment_data': ed
+                        }
+                        verify_risky_contacts_bulk([c_obj], supabase)
+                        
+                        # Fetch the freshly saved result
+                        fresh_res = supabase.table('contacts').select('enrichment_data').eq('id', seq['contact_id']).execute()
+                        if fresh_res.data:
+                            ed = fresh_res.data[0].get('enrichment_data') or {}
+                            serper_passed = ed.get('serper_verified')
+                    except Exception as e:
+                        _log(f"OSINT FALLBACK inline failed for {to_email}: {e}", level='error')
+                
+                # Evaluate final validation decision
+                if serper_passed is True:
                     _log(f"OSINT BOUNCE PROTECTION: Proceeding with {to_email} (Risky, but Google Verified!).")
                 else:
                     _log(f"BOUNCE PROTECTION: Skipping {to_email} (Status: RISKY/Catch-All, Not Google Verified). marking as skipped.", level='warning')
