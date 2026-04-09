@@ -1912,7 +1912,8 @@ For EACH email:
 - Change ~30% of wording while keeping the same meaning, intent, and length
 - **CRITICAL**: Maintain extremely natural, conversational, human language. Do NOT use forced or awkward synonyms (e.g. do not change "manually" to "by hand", keep natural industry standard words).
 - **CRITICAL DELIVERABILITY**: DO NOT use ANY of these exact spam trigger phrases: {spam_words}
-- CRITICAL: Preserve ALL template variables EXACTLY as written. Do NOT alter the spelling or format inside the braces.
+- CRITICAL: Preserve ALL template variables EXACTLY as written (e.g. {{{{first_name}}}}, {{{{company}}}}). Do NOT replace them with generic words like "there", "friend", "team", etc. They MUST remain as {{{{variable_name}}}} in the output.
+- **CRITICAL STRUCTURE**: Do NOT move the sender's name from the sign-off into the email body. If the original ends with "Best, Bipul", do NOT rewrite the opening as "Bipul here" or "This is Bipul" or similar. The sign-off name stays ONLY at the end.
 - Do NOT add new facts or claims not in the original
 - No citations, no footnotes, no bracketed numbers like [1]
 - Plain text only, no HTML and ABSOLUTELY NO markdown formatting (no asterisks `*` for emphasis, no bolding, no underscores).{contact_info}"""
