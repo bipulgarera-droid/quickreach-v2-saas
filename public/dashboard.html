@@ -2953,7 +2953,7 @@
             showToast(`🚀 Daily run started — checking replies + sending pending emails... <button onclick="switchTopTab('logs')" class="ml-2 text-violet-400 hover:text-violet-300 font-bold underline">View Live Logs</button>`, true);
 
             try {
-                const res = await fetch('/api/daily-run', {
+                const res = await apiFetch('/api/daily-run', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ limit: 99999, dry_run: false, project_id: currentProjectId })
