@@ -1,6 +1,7 @@
-import imaplib
+import base64
 import email
 import os
+import time
 import logging
 from datetime import datetime, timedelta
 from email.header import decode_header
@@ -138,15 +139,27 @@ def check_all_replies(days=7, logger_callback=None, skip_db_update=False):
                 
     log(f"Loaded {len(prospect_emails)} prospect emails and {len(subject_map)} campaign subjects.")
 
-    # Get Gmail Accounts
-    accounts = []
-    for i in range(1, 25):
-        e = os.getenv(f'GMAIL_{i}_EMAIL')
-        p = os.getenv(f'GMAIL_{i}_PASSWORD')
-        if e and p: accounts.append((e, p))
+    # ---------------------------------------------------------------------------
+    # Get Accounts — multi-tenant: load from Supabase user_email_accounts
+    # ---------------------------------------------------------------------------
+    log("Loading accounts from Supabase user_email_accounts...")
+    
+    try:
+        imap_res = supabase.table('user_email_accounts') \
+            .select('user_id, email_address, refresh_token') \
+            .eq('is_active', True) \
+            .not_.is_('refresh_token', 'null') \
+            .execute()
+        imap_rows = imap_res.data or []
+    except Exception as e:
+        log(f"Warning: Could not load accounts from DB ({e}).")
+        imap_rows = []
+
+    # Build accounts list: [(email, refresh_token, user_id)]
+    accounts = [(r.get('email_address'), r.get('refresh_token'), r.get('user_id')) for r in imap_rows if r.get('email_address') and r.get('refresh_token')]
 
     if not accounts:
-        log("No Gmail accounts found in environment")
+        log("No Gmail accounts found in DB with active refresh tokens.")
         return
 
     stats = {'human_replies': 0, 'bounces': 0, 'auto_replies': 0, 'spam_ignored': 0, 'unmatched_replies': 0, 'unmatched_bounces': 0}
@@ -154,40 +167,48 @@ def check_all_replies(days=7, logger_callback=None, skip_db_update=False):
     # Track already-processed contact IDs this run to avoid duplicate updates
     processed_contacts = set()
 
+    from googleapiclient.discovery import build
+    from google.oauth2.credentials import Credentials
+
+    client_id = os.getenv("GMAIL_CLIENT_ID")
+    client_secret = os.getenv("GMAIL_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        log("Missing GMAIL_CLIENT_ID or GMAIL_CLIENT_SECRET in environment!")
+        return
+
     # Scan ALL Accounts
-    for acct_email, acct_password in accounts:
+    for acct_email, acct_refresh_token, acct_user_id in accounts:
         log(f"\nScanning: {acct_email}...")
         try:
-            mail = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT, timeout=30)
-            mail.login(acct_email, acct_password)
-            
-            folder_status, _ = mail.select('"[Gmail]/All Mail"')
-            if folder_status != 'OK':
-                mail.select('INBOX')
+            creds = Credentials(
+                token=None,
+                refresh_token=acct_refresh_token,
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id=client_id,
+                client_secret=client_secret
+            )
+            service = build('gmail', 'v1', credentials=creds, cache_discovery=False)
 
-            since_date = (datetime.now() - timedelta(days=days)).strftime("%d-%b-%Y")
-            status, message_ids = mail.search(None, f'(SINCE {since_date})')
+            timestamp = int(time.time() - (days * 86400))
+            query = f"after:{timestamp}"
             
-            if status != "OK" or not message_ids[0]:
-                mail.logout()
+            results = service.users().messages().list(userId='me', q=query, maxResults=200).execute()
+            messages = results.get('messages', [])
+            
+            if not messages:
                 continue
                 
-            ids = message_ids[0].split()
-            log(f"  Messages: {len(ids)}")
+            log(f"  Messages: {len(messages)}")
             
             # Fetch and classify each email
-            for msg_index, msg_id in enumerate(reversed(ids)):
-                if msg_index > 200:  # Safety cap
-                    break
-                
+            for msg_index, msg_info in enumerate(messages):
                 try:
-                    res_status, fd = mail.fetch(msg_id, "(RFC822)")
-                    if res_status != 'OK' or not fd or not isinstance(fd[0], tuple):
+                    msg_data = service.users().messages().get(userId='me', id=msg_info['id'], format='raw').execute()
+                    raw_encoded = msg_data.get('raw')
+                    if not raw_encoded:
                         continue
                         
-                    raw_full = fd[0][1]
-                    if not raw_full: continue
-                    
+                    raw_full = base64.urlsafe_b64decode(raw_encoded.encode('ASCII'))
                     msg_obj = email.message_from_bytes(raw_full)
                     from_hdr = _decode_header_value(msg_obj.get("From", ""))
                     subject_hdr = _decode_header_value(msg_obj.get("Subject", ""))
@@ -294,16 +315,9 @@ def check_all_replies(days=7, logger_callback=None, skip_db_update=False):
                         stats['spam_ignored'] += 1
                         
                 except Exception as msg_err:
-                    err_str = str(msg_err).lower()
-                    if "eof" in err_str or "socket error" in err_str or "connection" in err_str:
-                        log(f"  ❌ Connection dropped (SSL/EOF). Aborting this account and moving to next.")
-                        break
-                    
                     log(f"  ❌ Error processing message: {msg_err}")
                     continue
                         
-            mail.logout()
-            
         except Exception as e:
             log(f"Error checking {acct_email}: {e}")
             import traceback

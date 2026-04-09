@@ -7,15 +7,13 @@ Adapted for the Film Festival Outreach App.
 """
 
 import os
-import os
 import time
 import base64
-from email.mime.text import MIMEText
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
+import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 from datetime import datetime, timedelta
 import json
 import threading
@@ -45,26 +43,15 @@ def get_today_str() -> str:
     return datetime.now().strftime('%Y-%m-%d')
 
 
-def _load_accounts_from_env() -> list[dict]:
-    """Load Gmail accounts from .env using GMAIL_N_EMAIL and GMAIL_N_REFRESH_TOKEN format."""
-    accounts = []
-    for i in range(1, 20):
-        email = os.getenv(f"GMAIL_{i}_EMAIL")
-        refresh_token = os.getenv(f"GMAIL_{i}_REFRESH_TOKEN")
-        group = os.getenv(f"GMAIL_{i}_GROUP", "all")
-        if not email or not refresh_token:
-            continue
-        accounts.append({"email": email.strip(), "refresh_token": refresh_token.strip(), "group": group.strip()})
-    return accounts
-
 
 class GmailAccount:
     """Represents a single Gmail account with send tracking."""
-    max_per_day = MAX_PER_DAY
     
-    def __init__(self, email: str, refresh_token: str, group: str = "all"):
+    def __init__(self, email: str, refresh_token: str, daily_limit: int = 30, hourly_limit: int = 20, group: str = "all"):
         self.email = email
         self.refresh_token = refresh_token
+        self.daily_limit = daily_limit
+        self.hourly_limit = hourly_limit
         self.group = group
         self.disabled = False
         self._sends_today_cache = 0
@@ -74,12 +61,8 @@ class GmailAccount:
         self.service = build('gmail', 'v1', credentials=self.credentials, cache_discovery=False)
         
     def _build_credentials(self) -> Credentials:
-        # Instead of loading credentials.json, we load the non-sensitive client ID and Secret from .env
-        # This allows the app to run on Railway without tracking credentials.json in Git,
-        # and satisfies GitHub Push Protection.
         client_id = os.getenv("GMAIL_CLIENT_ID")
         client_secret = os.getenv("GMAIL_CLIENT_SECRET")
-        
         if not client_id or not client_secret:
             logger.error("Missing GMAIL_CLIENT_ID or GMAIL_CLIENT_SECRET in environment!")
             
@@ -147,7 +130,7 @@ class GmailAccount:
 
     @property
     def can_send(self) -> bool:
-        return (not self.disabled and self.sends_today < MAX_PER_DAY and self.sends_hour < MAX_PER_HOUR)
+        return (not self.disabled and self.sends_today < self.daily_limit and self.sends_hour < self.hourly_limit)
 
     def record_send(self):
         """Record a new send in both the high-precision log and the daily aggregate."""
@@ -188,12 +171,21 @@ class SMTPPool:
     _send_lock = threading.Lock()
     _last_send_time: Optional[float] = None
 
-    def __init__(self):
-        accounts_data = _load_accounts_from_env()
+    def __init__(self, accounts_data: list[dict]):
         if not accounts_data:
-            raise ValueError("No Gmail API accounts found. Add GMAIL_1_REFRESH_TOKEN to .env")
+            logger.warning("[SMTP Pool] Initialized with empty accounts_data.")
+            self.accounts = []
+        else:
+            self.accounts = [
+                GmailAccount(
+                    a.get("email_address") or a.get("email"), 
+                    a["refresh_token"], 
+                    a.get("daily_limit", 30), 
+                    a.get("hourly_limit", 20), 
+                    a.get("group", "all")
+                ) for a in accounts_data
+            ]
             
-        self.accounts = [GmailAccount(a["email"], a["refresh_token"], a.get("group", "all")) for a in accounts_data]
         self._index = 0
         logger.info(f"[SMTP Pool] Loaded {len(self.accounts)} accounts.")
 
@@ -216,7 +208,7 @@ class SMTPPool:
             a for a in self.accounts 
             if sender_group == "all" or a.group == "all" or a.group == sender_group
         ]
-        return sum(a.max_per_day for a in usable_accounts)
+        return sum(a.daily_limit for a in usable_accounts)
 
     def get_account_by_email(self, email: str) -> Optional[GmailAccount]:
         """Find a specific account in the pool by its email address."""
@@ -335,7 +327,7 @@ class SMTPPool:
                 'status': status,
                 'sends_today': acc.sends_today,
                 'sends_hour': acc.sends_hour,
-                'max_per_day': MAX_PER_DAY,
-                'max_per_hour': MAX_PER_HOUR
+                'max_per_day': acc.daily_limit,
+                'max_per_hour': acc.hourly_limit
             }
         return stats
