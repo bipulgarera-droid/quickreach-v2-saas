@@ -132,7 +132,7 @@ def get_user_project_ids():
 # ROUTES — Google OAuth & Email Accounts
 # =============================================================================
 
-GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.send', 'https://www.googleapis.com/auth/userinfo.email']
+GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.send', 'https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/userinfo.email']
 
 # Allow OAuth testing on localhost (HTTP instead of HTTPS)
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
