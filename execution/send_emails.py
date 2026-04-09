@@ -259,10 +259,11 @@ def send_pending_emails(limit: int = 99999, dry_run: bool = False, project_id: s
                             continue
                         # ────────────────────────────────────────────────────────
                         now_sent = datetime.utcnow()
-                        supabase.table('email_sequences').update({
+                        update_res = supabase.table('email_sequences').update({
                             'status': 'sent',
                             'sent_at': now_sent.isoformat()
                         }).eq('id', seq['id']).execute()
+                        logger.info(f"Update response for {seq['id']}: {update_res.data}")
                         
                         # -------------------------------------------------------
                         # RESCHEDULE: Update subsequent pending steps relative to
