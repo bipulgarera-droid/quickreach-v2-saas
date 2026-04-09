@@ -114,9 +114,14 @@ def send_pending_emails(limit: int = 99999, dry_run: bool = False, project_id: s
     user_ids = list(user_sequences.keys())
     user_map = {}
     if user_ids:
-        users_res = supabase.table('users').select('id, full_name').in_('id', user_ids).execute()
+        users_res = supabase.table('users').select('id, full_name, email').in_('id', user_ids).execute()
         for u in (users_res.data or []):
-            user_map[u['id']] = u.get('full_name') or 'User'
+            name = u.get('full_name')
+            if not name:
+                # Derive a reasonable name from the email prefix instead of "User"
+                em = u.get('email', '')
+                name = em.split('@')[0].replace('.', ' ').replace('_', ' ').title() if em else 'Team'
+            user_map[u['id']] = name
 
     for user_id, u_seqs in user_sequences.items():
         if stats['sent'] >= limit:
