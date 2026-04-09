@@ -2641,8 +2641,8 @@ def get_smtp_capacity():
         project_id = request.args.get('project_id') # Optional: filter by project's sender_group
         from execution.smtp_pool import SMTPPool
         try:
-            pool = SMTPPool()
-            
+            acc_res = supabase.table('user_email_accounts').select('*').eq('user_id', request.user_id).execute()
+            pool = SMTPPool(acc_res.data or [])
             sender_group = "all"
             if project_id:
                 proj = supabase.table('projects').select('sender_group').eq('id', project_id).execute()

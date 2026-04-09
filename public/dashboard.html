@@ -617,7 +617,7 @@
 
         async function fetchSmtpCapacity() {
             try {
-                const res = await fetch('/api/smtp-capacity');
+                const res = await apiFetch('/api/smtp-capacity');
                 if (!res.ok) return;
                 const data = await res.json();
 
