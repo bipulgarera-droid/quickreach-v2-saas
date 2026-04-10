@@ -233,16 +233,17 @@ def cleanup_contacts(project_id=None):
             
         # 3. Deduplicate
         if email_addr:
-            # Primary: deduplicate by email (the gold standard)
+            # Primary: deduplicate by exact email
             if email_addr in seen_emails:
                 logger.info(f"Marking duplicate email for deletion: {email_addr}")
                 deletes.append(cid)
                 continue
             seen_emails[email_addr] = cid
-        elif domain:
-            # Fallback: deduplicate by domain ONLY when there's no email (e.g. contact forms)
+            
+        if domain:
+            # Secondary: enforce 1-prospect-per-domain per project
             if domain in seen_domains:
-                logger.info(f"Marking no-email duplicate domain for deletion: {domain}")
+                logger.info(f"Marking duplicate domain/company for deletion: {domain} (Strict Dedupe)")
                 deletes.append(cid)
                 continue
             seen_domains[domain] = cid

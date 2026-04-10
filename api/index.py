@@ -16,7 +16,6 @@ from pathlib import Path
 import requests
 import threading
 from google import genai
-from google_auth_oauthlib.flow import Flow
 # Setup
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
@@ -71,34 +70,6 @@ else:
     logger.warning("Supabase credentials not found")
 
 # =============================================================================
-# MIDDLEWARE
-# =============================================================================
-
-@app.before_request
-def authenticate_user():
-    # Only enforce auth on API routes
-    if not request.path.startswith('/api/'):
-        return None
-        
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        # Optionally allow unauthenticated requests to ping
-        if request.path in ['/api/ping', '/api/auth/google-connect', '/api/auth/google/callback']:
-            return None
-        return jsonify({"error": "Missing Authorization header"}), 401
-        
-    token = auth_header.split(" ")[1]
-    try:
-        user_res = supabase.auth.get_user(token)
-        if user_res and user_res.user:
-            request.user_id = user_res.user.id
-        else:
-            return jsonify({"error": "Invalid token"}), 401
-    except Exception as e:
-        logger.warning(f"Failed to authenticate user: {e}")
-        return jsonify({"error": "Authentication failed"}), 401
-
-# =============================================================================
 # ROUTES — Pages
 # =============================================================================
 
@@ -119,228 +90,13 @@ def ping():
     })
 
 # =============================================================================
-# HELPERS
-# =============================================================================
-
-def get_user_project_ids():
-    user_id = getattr(request, 'user_id', None)
-    if not user_id: return []
-    res = supabase.table('projects').select('id').eq('user_id', user_id).execute()
-    return [r['id'] for r in (res.data or [])]
-
-# =============================================================================
-# ROUTES — Google OAuth & Email Accounts
-# =============================================================================
-
-GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.send', 'https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/userinfo.email']
-
-# Allow OAuth testing on localhost (HTTP instead of HTTPS)
-os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
-# Google returns ALL previously granted scopes for this client (e.g. drive from festivals repo).
-# Without this, oauthlib throws "Scope has changed" error on strict mismatch.
-os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
-
-@app.route('/api/auth/google-connect', methods=['GET'])
-def google_connect():
-    token = request.args.get('token')
-    if not token:
-        return "Missing token", 401
-    try:
-        user_res = supabase.auth.get_user(token)
-        user_id = user_res.user.id
-    except Exception as e:
-        return "Invalid token", 401
-
-    client_id = os.getenv("GMAIL_CLIENT_ID")
-    client_secret = os.getenv("GMAIL_CLIENT_SECRET")
-    
-    if not client_id or not client_secret:
-        return "OAuth missing credentials in .env", 500
-
-    client_config = {
-        "web": {
-            "client_id": client_id,
-            "project_id": "quickreach-saas",
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-            "client_secret": client_secret
-        }
-    }
-    
-    redirect_uri = request.host_url.rstrip('/') + "/api/auth/google/callback"
-    if "up.railway.app" in redirect_uri or "railway.internal" in redirect_uri:
-        redirect_uri = redirect_uri.replace("http://", "https://")
-    
-    flow = Flow.from_client_config(
-        client_config,
-        scopes=GMAIL_SCOPES,
-        redirect_uri=redirect_uri
-    )
-    
-    auth_url, state = flow.authorization_url(
-        access_type='offline',
-        include_granted_scopes='true',
-        prompt='consent',
-        state=user_id
-    )
-    return redirect(auth_url)
-
-@app.route('/api/auth/google/callback', methods=['GET'])
-def google_callback():
-    state = request.args.get('state')
-    if not state:
-        return "Missing state (user_id)", 400
-        
-    client_id = os.getenv("GMAIL_CLIENT_ID")
-    client_secret = os.getenv("GMAIL_CLIENT_SECRET")
-    client_config = {
-        "web": {
-            "client_id": client_id,
-            "project_id": "quickreach-saas",
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-            "client_secret": client_secret
-        }
-    }
-    
-    redirect_uri = request.host_url.rstrip('/') + "/api/auth/google/callback"
-    if "up.railway.app" in redirect_uri or "railway.internal" in redirect_uri:
-        redirect_uri = redirect_uri.replace("http://", "https://")
-        
-    flow = Flow.from_client_config(
-        client_config,
-        scopes=GMAIL_SCOPES,
-        state=state,
-        redirect_uri=redirect_uri
-    )
-    
-    auth_response = request.url
-    if "up.railway.app" in auth_response or "railway.internal" in auth_response:
-        auth_response = auth_response.replace("http://", "https://")
-        
-    try:
-        flow.fetch_token(authorization_response=auth_response)
-        creds = flow.credentials
-    except Exception as e:
-        logger.error(f"Failed to fetch token: {e}")
-        return f"OAuth Error: {e}", 400
-        
-    import requests as req
-    userinfo_url = "https://www.googleapis.com/oauth2/v1/userinfo?alt=json"
-    headers = {"Authorization": f"Bearer {creds.token}"}
-    resp = req.get(userinfo_url, headers=headers)
-    email_address = resp.json().get('email', 'unknown@gmail.com')
-    
-    refresh_token = creds.refresh_token
-    if not refresh_token:
-        # Check if already exists in DB
-        res = supabase.table('user_email_accounts').select('refresh_token').eq('user_id', state).eq('email_address', email_address).execute()
-        if res.data and res.data[0].get('refresh_token'):
-            refresh_token = res.data[0]['refresh_token']
-        else:
-            return "No refresh token provided by Google. Please disconnect the app in your Google Account security settings and try again.", 400
-            
-    try:
-        supabase.table('user_email_accounts').upsert({
-            'user_id': state,
-            'email_address': email_address,
-            'provider': 'gmail',
-            'refresh_token': refresh_token,
-            'is_active': True
-        }).execute()
-    except Exception as e:
-        logger.error(f"Failed to save email account: {e}")
-        return f"Database error: {e}", 500
-        
-    return redirect('/dashboard#email-accounts')
-
-@app.route('/api/email-accounts', methods=['GET'])
-def list_email_accounts():
-    """List all email accounts for the authenticated user."""
-    try:
-        user_id = getattr(request, 'user_id', None)
-        result = supabase.table('user_email_accounts') \
-            .select('id, email_address, provider, is_active, daily_limit, hourly_limit, created_at') \
-            .eq('user_id', user_id) \
-            .order('created_at', desc=False) \
-            .execute()
-        return jsonify({'accounts': result.data or []})
-    except Exception as e:
-        logger.error(f"List email accounts error: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/email-accounts', methods=['POST'])
-def add_email_account():
-    """Add a new email account for the authenticated user."""
-    try:
-        user_id = getattr(request, 'user_id', None)
-        data = request.json
-        email_addr = data.get('email_address', '').strip()
-        app_pwd = data.get('app_password', '').strip()
-        if not email_addr or not app_pwd:
-            return jsonify({'error': 'Email address and app password are required'}), 400
-
-        result = supabase.table('user_email_accounts').insert({
-            'user_id': user_id,
-            'email_address': email_addr,
-            'email': email_addr,
-            'app_password': app_pwd,
-            'imap_password': data.get('imap_password', app_pwd),
-            'daily_limit': data.get('daily_limit', 30),
-            'hourly_limit': data.get('hourly_limit', 20),
-            'provider': 'gmail',
-            'is_active': True
-        }).execute()
-        return jsonify({'success': True, 'account': result.data[0] if result.data else {}})
-    except Exception as e:
-        logger.error(f"Add email account error: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/email-accounts/<account_id>', methods=['DELETE'])
-def delete_email_account(account_id):
-    """Remove an email account (only if owned by authenticated user)."""
-    try:
-        user_id = getattr(request, 'user_id', None)
-        supabase.table('user_email_accounts').delete() \
-            .eq('id', account_id).eq('user_id', user_id).execute()
-        return jsonify({'success': True})
-    except Exception as e:
-        logger.error(f"Delete email account error: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/email-accounts/<account_id>', methods=['PATCH'])
-def toggle_email_account(account_id):
-    """Toggle an email account active/inactive."""
-    try:
-        user_id = getattr(request, 'user_id', None)
-        data = request.json
-        updates = {}
-        if 'is_active' in data:
-            updates['is_active'] = data['is_active']
-        if 'daily_limit' in data:
-            updates['daily_limit'] = data['daily_limit']
-        if 'hourly_limit' in data:
-            updates['hourly_limit'] = data['hourly_limit']
-        if not updates:
-            return jsonify({'error': 'No fields to update'}), 400
-        supabase.table('user_email_accounts').update(updates) \
-            .eq('id', account_id).eq('user_id', user_id).execute()
-        return jsonify({'success': True})
-    except Exception as e:
-        logger.error(f"Toggle email account error: {e}")
-        return jsonify({'error': str(e)}), 500
-
-# =============================================================================
 # ROUTES — Projects
 # =============================================================================
 
 @app.route('/api/projects', methods=['GET'])
 def list_projects():
     try:
-        user_id = getattr(request, 'user_id', None)
-        result = supabase.table('projects').select('*').eq('user_id', user_id).order('created_at', desc=True).execute()
+        result = supabase.table('projects').select('*').order('created_at', desc=True).execute()
         return jsonify({'projects': result.data or []})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -362,20 +118,13 @@ def list_sender_groups():
 def list_projects_with_stats():
     """List all projects with lead counts."""
     try:
-        user_id = getattr(request, 'user_id', None)
-        projects = supabase.table('projects').select('*').eq('user_id', user_id).order('created_at', desc=True).execute()
-        
+        projects = supabase.table('projects').select('*').order('created_at', desc=True).execute()
         # Single query: fetch contact project_ids, email, instagram and count in Python
-        project_ids = [p['id'] for p in (projects.data or [])]
-        contacts_data = []
-        if project_ids:
-            contacts = supabase.table('contacts').select('project_id, email, instagram').in_('project_id', project_ids).execute()
-            contacts_data = contacts.data or []
-            
+        contacts = supabase.table('contacts').select('project_id, email, instagram').execute()
         lead_counts = {}
         email_counts = {}
         ig_counts = {}
-        for c in contacts_data:
+        for c in (contacts.data or []):
             pid = c.get('project_id')
             if pid:
                 lead_counts[pid] = lead_counts.get(pid, 0) + 1
@@ -419,10 +168,7 @@ def update_project(project_id):
         if not updates:
             return jsonify({'success': True})
 
-        user_id = getattr(request, 'user_id', None)
-        res = supabase.table('projects').update(updates).eq('id', project_id).eq('user_id', user_id).execute()
-        if not res.data:
-            return jsonify({'error': 'Unauthorized or project not found'}), 403
+        supabase.table('projects').update(updates).eq('id', project_id).execute()
         return jsonify({'success': True, **updates})
     except Exception as e:
         logger.error(f"Update project error: {e}")
@@ -432,12 +178,6 @@ def update_project(project_id):
 def delete_project(project_id):
     """Delete a project and all its associated contacts and sequences."""
     try:
-        user_id = getattr(request, 'user_id', None)
-        # Verify ownership
-        proj = supabase.table('projects').select('id').eq('id', project_id).eq('user_id', user_id).execute()
-        if not proj.data:
-            return jsonify({'error': 'Unauthorized or project not found'}), 403
-            
         # Delete sequences for contacts in this project
         supabase.table('email_sequences').delete().eq('project_id', project_id).execute()
         # Delete email templates
@@ -456,7 +196,6 @@ def delete_project(project_id):
 @app.route('/api/projects', methods=['POST'])
 def create_project():
     try:
-        user_id = getattr(request, 'user_id', None)
         data = request.json
         name = data.get('name')
         description = data.get('description', '')
@@ -467,7 +206,6 @@ def create_project():
         # 1. Create the project
         niche = data.get('niche', '').strip()
         insert_data = {
-            'user_id': user_id,
             'name': name, 
             'description': description,
             'custom_instructions': custom_instructions,
@@ -534,7 +272,6 @@ def dashboard_stats():
     try:
         project_id = request.args.get('project_id')
         if not project_id: return jsonify({'error': 'project_id required'}), 400
-        if project_id not in get_user_project_ids(): return jsonify({'error': 'Unauthorized'}), 403
 
         # Helper: count rows matching a status using server-side COUNT (avoids 1k row limit)
         def ccount(table, status=None):
@@ -592,9 +329,6 @@ def daily_snapshot():
     from datetime import timedelta
     import json as json_mod
     try:
-        user_pids = get_user_project_ids()
-        if not user_pids: return jsonify({'projects': [], 'total_pending': 0})
-
         ist_now = datetime.utcnow() + timedelta(hours=5, minutes=30)
         date_str = ist_now.strftime('%Y-%m-%dT23:59:59')
         today_str = ist_now.strftime('%Y-%m-%d')
@@ -602,7 +336,6 @@ def daily_snapshot():
         result = supabase.table('email_sequences')\
             .select('id, contact_id, subject, body, step_number, project_id, scheduled_at, manual_channel, contacts(name, email, instagram, enrichment_data), projects(name)')\
             .eq('status', 'pending')\
-            .in_('project_id', user_pids)\
             .lte('scheduled_at', date_str)\
             .order('scheduled_at')\
             .execute()
@@ -706,7 +439,6 @@ def list_contacts():
     try:
         project_id = request.args.get('project_id')
         if not project_id: return jsonify({'error': 'project_id required'}), 400
-        if project_id not in get_user_project_ids(): return jsonify({'error': 'Unauthorized'}), 403
         status = request.args.get('status')
         search = request.args.get('search', '')
         limit = int(request.args.get('limit', 50))
@@ -761,9 +493,7 @@ def list_contacts():
 def get_contact(contact_id):
     """Get single contact."""
     try:
-        user_pids = get_user_project_ids()
-        if not user_pids: return jsonify({'error': 'Unauthorized'}), 403
-        result = supabase.table('contacts').select('*').eq('id', contact_id).in_('project_id', user_pids).single().execute()
+        result = supabase.table('contacts').select('*').eq('id', contact_id).single().execute()
         return jsonify({'contact': result.data})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -773,12 +503,6 @@ def get_contact(contact_id):
 def update_contact(contact_id):
     """Update a contact."""
     try:
-        user_pids = get_user_project_ids()
-        if not user_pids: return jsonify({'error': 'Unauthorized'}), 403
-        
-        chk = supabase.table('contacts').select('id').eq('id', contact_id).in_('project_id', user_pids).execute()
-        if not chk.data: return jsonify({'error': 'Unauthorized'}), 403
-
         data = request.json
         allowed = ['name', 'company', 'bio', 'linkedin_url', 'email', 'instagram',
                    'website', 'phone', 'icebreaker', 'status', 'notes']
@@ -795,9 +519,6 @@ def update_contact(contact_id):
 def bulk_update_contacts():
     """Bulk update fields for multiple contacts."""
     try:
-        user_pids = get_user_project_ids()
-        if not user_pids: return jsonify({'error': 'Unauthorized'}), 403
-
         data = request.json
         updates = data.get('updates', [])
         
@@ -813,9 +534,6 @@ def bulk_update_contacts():
         def process_update(u):
             c_id = u.get('id')
             if not c_id: return False
-            
-            chk = supabase.table('contacts').select('id').eq('id', c_id).in_('project_id', user_pids).execute()
-            if not chk.data: return False
             
             update_data = {k: v for k, v in u.items() if k in allowed and k != 'id'}
             if not update_data: return False
@@ -847,8 +565,6 @@ def add_contact_manual():
         project_id = request.args.get('project_id') or data.get('project_id')
         if not project_id:
             return jsonify({'error': 'project_id required'}), 400
-        if project_id not in get_user_project_ids():
-            return jsonify({'error': 'Unauthorized'}), 403
 
         name = (data.get('name') or '').strip()
         email = (data.get('email') or '').strip().rstrip('.,;:)!% ]').strip()
@@ -857,13 +573,44 @@ def add_contact_manual():
         if not name and not email:
             return jsonify({'error': 'At least a name or email is required'}), 400
 
+        # Helper for domain extraction
+        from urllib.parse import urlparse
+        def _get_domain(url_str):
+            if not url_str: return ""
+            try:
+                nl = urlparse(url_str).netloc.lower()
+                if nl.startswith('www.'): nl = nl[4:]
+                parts = nl.split('.')
+                return ".".join(parts[-2:]) if len(parts) >= 2 else nl
+            except: return ""
+
+        new_domain = ""
+        if email and '@' in email:
+            new_domain = email.split('@')[-1].lower()
+        elif data.get('website'):
+            new_domain = _get_domain(data.get('website'))
+
+        GENERIC_DOMAINS = {'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com', 'aol.com', 'me.com', 'msn.com', 'live.com'}
+
         # Dedup check
-        existing = supabase.table('contacts').select('id, name, email, linkedin_url').eq('project_id', project_id).execute()
+        existing = supabase.table('contacts').select('id, name, email, linkedin_url, website').eq('project_id', project_id).execute()
         for row in (existing.data or []):
             if email and row.get('email') and row['email'].lower() == email.lower():
                 return jsonify({'error': f'A contact with email {email} already exists'}), 409
             if linkedin_url and row.get('linkedin_url') and row['linkedin_url'].lower().rstrip('/') == linkedin_url.lower().rstrip('/'):
                 return jsonify({'error': f'A contact with that LinkedIn URL already exists'}), 409
+                
+            # Domain dedupe
+            if new_domain and new_domain not in GENERIC_DOMAINS:
+                row_domain = ""
+                row_email = row.get('email')
+                if row_email and '@' in row_email:
+                    row_domain = row_email.split('@')[-1].lower()
+                elif row.get('website'):
+                    row_domain = _get_domain(row.get('website'))
+                    
+                if row_domain == new_domain:
+                    return jsonify({'error': f'A contact from the company domain {new_domain} already exists in this project'}), 409
 
         # Build enrichment_data
         enrichment = {}
@@ -1912,8 +1659,7 @@ For EACH email:
 - Change ~30% of wording while keeping the same meaning, intent, and length
 - **CRITICAL**: Maintain extremely natural, conversational, human language. Do NOT use forced or awkward synonyms (e.g. do not change "manually" to "by hand", keep natural industry standard words).
 - **CRITICAL DELIVERABILITY**: DO NOT use ANY of these exact spam trigger phrases: {spam_words}
-- CRITICAL: Preserve ALL template variables EXACTLY as written (e.g. {{{{first_name}}}}, {{{{company}}}}). Do NOT replace them with generic words like "there", "friend", "team", etc. They MUST remain as {{{{variable_name}}}} in the output.
-- **CRITICAL STRUCTURE**: Do NOT move the sender's name from the sign-off into the email body. If the original ends with "Best, Bipul", do NOT rewrite the opening as "Bipul here" or "This is Bipul" or similar. The sign-off name stays ONLY at the end.
+- CRITICAL: Preserve ALL template variables EXACTLY as written. Do NOT alter the spelling or format inside the braces.
 - Do NOT add new facts or claims not in the original
 - No citations, no footnotes, no bracketed numbers like [1]
 - Plain text only, no HTML and ABSOLUTELY NO markdown formatting (no asterisks `*` for emphasis, no bolding, no underscores).{contact_info}"""
@@ -2352,9 +2098,7 @@ def send_test_sequence():
         # Send via SMTP Pool
         from execution.smtp_pool import SMTPPool
         try:
-            accounts_res = supabase.table('user_email_accounts').select('*').eq('user_id', request.user_id).execute()
-            accounts_data = accounts_res.data or []
-            pool = SMTPPool(accounts_data)
+            pool = SMTPPool()
         except ValueError as e:
             return jsonify({'error': str(e)}), 500
             
@@ -2642,8 +2386,8 @@ def get_smtp_capacity():
         project_id = request.args.get('project_id') # Optional: filter by project's sender_group
         from execution.smtp_pool import SMTPPool
         try:
-            acc_res = supabase.table('user_email_accounts').select('*').eq('user_id', request.user_id).execute()
-            pool = SMTPPool(acc_res.data or [])
+            pool = SMTPPool()
+            
             sender_group = "all"
             if project_id:
                 proj = supabase.table('projects').select('sender_group').eq('id', project_id).execute()
@@ -3022,5 +2766,5 @@ def list_job_events(job_id):
 # =============================================================================
 
 if __name__ == '__main__':
-    port = int(os.getenv('FLASK_PORT', 5008))
+    port = int(os.getenv('FLASK_PORT', 5001))
     app.run(host='0.0.0.0', port=port, debug=True)

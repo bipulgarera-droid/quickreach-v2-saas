@@ -247,6 +247,20 @@ def classify_email(sender: str, subject: str, body_snippet: str, prospect_emails
         result['matched_email'] = sender
         result['matched_company'] = company
         return result
+        
+    # Tactic A.5: Sender's domain matches a prospect's domain (e.g. Assistant replying for CEO)
+    # Ensure it's not a generic email provider or empty
+    if sender_domain and sender_domain not in ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com', 'aol.com', 'me.com', 'msn.com', 'live.com']:
+        for prospect_email, (cid, pid, company) in prospect_emails.items():
+            prospect_domain = prospect_email.split('@')[-1] if '@' in prospect_email else ''
+            if prospect_domain == sender_domain:
+                result['classification'] = 'HUMAN_REPLY'
+                result['reason'] = f'Colleague reply: Sender "{sender}" shares domain "{sender_domain}" with prospect "{prospect_email}"'
+                result['matched_contact_id'] = cid
+                result['matched_project_id'] = pid
+                result['matched_email'] = prospect_email
+                result['matched_company'] = company
+                return result
     
     # Tactic B: Subject matches "Re: {our campaign subject}"
     if 're:' in subj_lower or 'fw:' in subj_lower or 'fwd:' in subj_lower:
