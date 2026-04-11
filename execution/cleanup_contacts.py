@@ -215,6 +215,12 @@ def cleanup_contacts(project_id=None):
             deletes.append(cid)
             continue
             
+        # 1.5 Filter Placeholder Emails
+        if email_addr and any(placeholder in email_addr for placeholder in ['jane.doe@', 'john.doe@', 'johndoe@', 'janedoe@', 'email@', 'yourname@', 'name@']):
+            logger.info(f"Deleting placeholder/dummy contact: {email_addr}")
+            deletes.append(cid)
+            continue
+            
         # 2. Extract Clean Name
         if not url:
             new_name = c.get('name', '')
